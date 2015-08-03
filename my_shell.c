@@ -17,7 +17,7 @@
 
 void print_prompt()
 {
-	printf("myshell~$ ");				//打印提示符
+	printf("my@shell~$ ");	
 }
 
 
@@ -64,7 +64,7 @@ void get_input(char *buf, int *argcount, char arglist[100][256])
 			k++;					
 			j=0;
 		}			
-	 
+	 	arglist[k][j] = '\0';
 		i++;
 	}
 
@@ -220,7 +220,7 @@ int do_cmd(int *argcount, char arglist[100][256])
 				execvp(arg[0],arg );			//执行命令
 		}
 		else{
-			printf("can not found the command\n");		//命令未发现
+			printf("can not found the command1\n");		//命令未发现
 		}
 		break;
 
@@ -232,7 +232,7 @@ int do_cmd(int *argcount, char arglist[100][256])
 			execvp(arg[0], arg);				//调用execvp()函数在子进程执行另一个程序
 		}
 		else {
-			printf("can not found the command!\n");		//目录中找不到该命令
+			printf("can not found the command!2\n");		//目录中找不到该命令
 		}
 		break;
  
@@ -245,7 +245,7 @@ int do_cmd(int *argcount, char arglist[100][256])
 				execvp(arg[0], arg);			//调用execvp()函数在子进程执行另一个程序
 		}
 		else {
-			printf("can not found the command!\n");		//目录中找不到该文件
+			printf("can not found the command!3\n");		//目录中找不到该文件
 		}
 		break;
 
@@ -322,7 +322,21 @@ int main(int argc, char **argv)
 		memset(buf, 0, 256);					//初始化数组
 		print_prompt();						//输出提示符
 		get_input(buf, &argcount, arglist);			//按空格分解命令
-		if (do_cmd(&argcount, arglist) == 1){			//解析命令并执行
+		if(strcmp(arglist[0], "cd") == 0) {
+			if(argcount == 1) { 
+				chdir("/home/lxd");
+			} else if(argcount == 2) {
+				if(strcmp(arglist[1], ".") == 0){
+					continue;	
+				} else if(strcmp(arglist[1],"~") == 0) {
+					chdir("/home/lxd");
+				} else {
+					if(chdir(arglist[1]) == -1)
+					printf("shu ru mulu bu zhengque\n");
+ 				}
+			}
+	}	
+		else if (do_cmd(&argcount, arglist) == 1){			//解析命令并执行
 			wait(NULL);	getchar();			//等待子进程结束
 			printf("已完成\n");
 		}
