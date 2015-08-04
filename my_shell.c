@@ -306,13 +306,16 @@ int do_cmd(int *argcount, char arglist[100][256])
 
 int main(int argc, char **argv)
 {
-	int		i;
+	int		i,j,len;
 	int		argcount;
 	char		arglist[100][256];
 	char		**arg = NULL;
 	char 		*buf;
-
+	char 		*buffer;
+	char		a[80];
+	char		b[80];
 	buf = (char *)malloc(256);					//分配空间
+	buffer = (char *)malloc(80);
 	if(buf == NULL) {			
 		printf("malloc failed\n");				//分配失败
 		exit(-1);
@@ -326,7 +329,20 @@ int main(int argc, char **argv)
 			if(argcount == 1) { 
 				chdir("/home/lxd");
 			} else if(argcount == 2) {
-				if(strcmp(arglist[1], ".") == 0){
+				if(strcmp(arglist[1],"..") == 0) {
+					 getcwd(buffer, 80);
+					 len = strlen(buffer);
+					 strcpy(a, buffer);
+					 for(i=len; i>0; i--) {
+						if(a[i] == '/'){
+						a[i] = '\0';
+						break;
+						}
+					}
+					chdir(a);
+				}
+						
+				else if(strcmp(arglist[1], ".") == 0){
 					continue;	
 				} else if(strcmp(arglist[1],"~") == 0) {
 					chdir("/home/lxd");
