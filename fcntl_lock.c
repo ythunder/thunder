@@ -68,8 +68,8 @@ int main()
 	}
 	/*初始化lock的结构*/
 	memset(&lock, 0, sizeof(struct flock));					//清空结构体
-	lock.l_start = SEEK_SET;						//锁整个文件
-	lock.l_whence = 0;
+	lock.l_whence = SEEK_SET;						//锁整个文件
+	lock.l_start = 0;
 	lock.l_len = 0;
 
 	/*设置读锁*/

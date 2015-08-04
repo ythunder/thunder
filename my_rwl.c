@@ -60,9 +60,9 @@ int main()
 	int 	fd;
 	char	write_buf[32] = "hello  world!";
 
-//	if(fd = creat("example_63.c", S_IRUSR) == -1){
+	if(fd = creat("example_63.c", S_IRUSR) == -1){
 //umask(0);
-	if((fd = open("example_63.c", O_RDWR|O_CREAT|O_TRUNC, S_IRWXU)) == -1){
+//	if((fd = open("example_63.c", O_RDWR|O_CREAT|O_TRUNC, S_IRWXU)) == -1){
 		
 		my_err("open" , __LINE__);
 	} else {
