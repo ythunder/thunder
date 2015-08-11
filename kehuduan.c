@@ -7,16 +7,21 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "my_recv.c"
+int get_apply(char *buf, int len);	
 
-
-
+int input_apply(int conn_fd, const char *string);
+int flag_up = 0;
 int main(int argc, char **argv)
 {
+    char	       a[32],b[32];
+    char 	       choice;
+    int		       conn_fd;
+    int		       ret;
     int		       i;
     int		       serv_port;
     struct sockaddr_in serv_addr;
-    char	       recv_buf[BUFSIZE];
-
+    char 		recv_buf[1024];
     /*初始化服务器端地址结构*/
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
@@ -41,7 +46,7 @@ int main(int argc, char **argv)
 	}
 	continue;
     }
-
+    }
     if(serv_addr.sin_port == 0 || serv_addr.sin_addr.s_addr == 0) {	//判断,确保IP地址和端口号都存在
 	printf("Usage:[-p] [serv_addr.sin_port] [-a] [serv_address]\n");
 	exit(1);
@@ -54,7 +59,7 @@ int main(int argc, char **argv)
     }
 
     /*向服务器发送连接请求*/
-    if(connect(conn_fd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) < 0)
+    if(connect(conn_fd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) < 0) {
 	my_err("connet ", __LINE__);
     }
 
@@ -62,24 +67,38 @@ int main(int argc, char **argv)
         printf("申请或者注册");
         printf("1.申请 2.注册");
 	choice = getchar();
-    }while(choice != '1' && choice != '2');	//选择申请或者注册
-
-    switch(choice) {
-	case '1': input_apply(conn_fd, "账户:");
-		  input_apply(conn_fd, "密码:");  
-		if(ret = my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
-		      my_err("recv", __LINE__);
-		   }
-		  
+    }while(choice != '1' && choice != '2');	
+    
+   switch(choice) {
+       case '1': 
+	my_send(conn_fd,"1\n");
+	if(ret = my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
+	    my_err("recv",__LINE__);
+	}
+	if(recv_buf[0] == '1') {
+	    input_apply(conn_fd, "账户");
+	}
+	if(flag_up == 1) {
+	    get_apply(a, 32);
+	    printf("再输入一次");
+	    get_apply(b,32);
+	    if(strcmp(a,b) == 0 ) {
+		my_send(conn_fd, a);
+	    }
+	}
+	break;
+	case 2:break;
+}
+}		  
 		 
-		  
-
+		
+		
 /****************************************
     buf:暂时用来存放数据的缓存
-    len:buf长度
+		=
     实现从键盘获取账户存入buf中
 ****************************************/
-void get_apply(char *buf, int len)	
+int get_apply(char *buf, int len)	
 {
     int i=0;
     char c;
@@ -106,12 +125,12 @@ void get_apply(char *buf, int len)
     实现将input_buf中的数据服务器
 ****************************************************/
 
-void input_apply(int conn_fd, const char *string)
+int input_apply(int conn_fd, const char *string)
 {
     char input_buf[32];
-    char recv_buf[BUFSIZE];
+    char recv_buf[1024];
+   
     
-    do {
 	printf("%s", string);
 	if(get_apply(input_buf, 32) < 0) {
 	    printf("error from get_apply\n");
@@ -121,6 +140,17 @@ void input_apply(int conn_fd, const char *string)
 	if(send(conn_fd, input_buf, strlen(input_buf), 0) < 0) {	//送粗去
 	    my_err("send",__LINE__);
 	}
-
-
-
+	if(my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
+	    printf("data is too long");
+	    exit(0);
+	}
+	
+	if(recv_buf[0] == 'r') {
+	    printf("该账户已被注册,请重新申请!");
+	    return 0;
+	} else if(recv_buf[0] == 'y'){
+	    flag_up = 1;
+	}
+    return 0;
+}
+	
