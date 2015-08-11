@@ -13,26 +13,33 @@
 #define PORT_NUM 9527	//端口号
 #define LISTENQ	 13 	//可建立的最大连接数
 
+struct person *read_file();
+void my_send(int conn_fd, const char *string);
+ 
 struct person
 {
     char	   Id[32];
     char 	   Msg[32];
     struct person  *next;
-}
+}siliao;
 
 
 int main(void)
-{	
+{
+    pid_t	       pid;	
     int		       optval;
     int		       sock_fd;					//服务器端套接字
     int		       conn_fd;					//客户端套接字
     int		       flag = 0;
+    int		       ret;
     struct sockaddr_in serv_addr;				//定义服务器端套接字地址结构变量
     struct sockaddr_in cli_addr;				//定义客户端套接字地址结构变量
     struct person	*head;
-    struct ptemp 	*temp;
+    struct person	*temp;
     char 		*string;
-      
+    socklen_t		cli_len; 
+   char 		recv_buf[128];
+    FILE   		*fp;
     /*初始化服务器端地址结构*/
     memset (&serv_addr, 0, sizeof(struct sockaddr_in) );	//将结构体清零
     serv_addr.sin_family = AF_INET;				//地址类型,使用IPv4 TCP/IP协议
@@ -54,21 +61,19 @@ int main(void)
     if(listen(sock_fd, LISTENQ) < 0) {				//LISTENQ为链接的客户端个数上限
 	my_err("listen ",__LINE__);
     }
-    FD_ZERO(&readfds);
-    FD_SET(server_fd, &readfd);
 
     /*设置套接字属性*/
     if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&optval,  //optval用来存放获得的套接字选项
 	sizeof(int)) < 0) {
 	my_err("setsocket", __LINE__);
     }
-
+    cli_len = sizeof(struct sockaddr_in);
     /*等待客户端链接*/
     while(1) {
 	    conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr,		//通过accept接受客户端的请求
-	    sizeof(struct sockaddr_in));
+	    &cli_len);
 	    if(conn_fd < 0) {
-		my_err("accept ", __LINE __);
+		my_err("accept ", __LINE__);
 	    }    
 	    printf("Client from %s", inet_ntoa(cli_addr.sin_addr));		//cli_addr为客户端地址结构
 	    //创建一个子进程处理刚刚收到的连接请求
@@ -79,10 +84,14 @@ int main(void)
 			exit(1);
 		    }
 		    recv_buf[ret-1] = '\0';		
+	            if(recv_buf[0] == '1') {				//此时选择注册账户
+			my_send(conn_fd, "1");			//发送账户过去
 			
-			head = read_file();
-
+			if(my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
+			    my_err("recv",__LINE__);
+			}
 			/*判断从客户端收到的账户名是否已存在,存在返回'r',不存在返回'y'*/
+			head = read_file();
 			for(temp = head->next; temp != NULL; temp = temp->next) {
 			    if(strcmp(temp->Id, recv_buf) == 0 ) {
 				my_send(conn_fd, "r\n");
@@ -91,21 +100,26 @@ int main(void)
       		        }
 			if(flag == 0) {
 			    my_send(conn_fd,"y\n");
+			    fp=fopen("number.txt","at");
+			    if(fp == NULL) {
+			        printf("打开文件失败\n");
+				exit(1);
+			    }
+			    fprintf(fp, "%s ", recv_buf);
+			    if(my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
+				my_err("recv ",__LINE__);
+			    }
+			    fprintf(fp,"%s\n", recv_buf);
+			    fclose(fp);
+			 }
 			}
+		}
+	}	
+	wait(NULL);
+		
+}}
 
 
-
-/*******************************************
-   conn_fd:处于连接状态的套接字
-   string :要发出的字符串
-   实现将string中的内容传递给连接的客户端
-********************************************/
-void my_send(int conn_fd, const char *string) 
-{
-    if(send(conn_fd, string, strlen(string), 0) < 0) {
-	my_err("send",__LINE__);
-    }
-}
 
 
 /********************************************
@@ -130,7 +144,7 @@ struct person *read_file()
   
     while(!feof(fp)) {
 	ptemp = (struct person *)malloc(sizeof(struct person));
-	fscanf(fp,"%s %s", &ptemp->Id, ptemp->Msg);
+	fscanf(fp,"%s %s", ptemp->Id, ptemp->Msg);
 
 	r->next == ptemp;
 	r = ptemp;
