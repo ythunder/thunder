@@ -10,31 +10,27 @@
 
 struct person
 {
-    int		Id;
+    char	Id[10];
     char	username[32];
     char	passwd[32];
 };
 
 void jiexi(char *recv_buf, int id,struct person message);
 int fen_id(void);
-
+void zhuce(int conn_fd);
 int main()
 {    
     int   		sock_fd, conn_fd;
     socklen_t   	cli_len;
     char		choice;
-    struct person	 message;
-    struct person 	mess[80];
-    FILE 		 *fp;
-    char 		   *string = "注册成功";
     struct sockaddr_in  cli_addr, serv_addr;
     pid_t 		  pid;
-    int			new_id;
-    char 		recv_buf[128];
-
+    char		  buf[3];
+    int			c;
+    
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(9527);
+    serv_addr.sin_port = htons(9528);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
      
   
@@ -55,15 +51,34 @@ int main()
 /**********************************************************************************/
     cli_len = sizeof(struct sockaddr_in);
     while(1) {
-
     conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr, &cli_len);
     if(conn_fd < 0) {
 	fprintf(stderr, "line: %d\n",__LINE__);
     }
     printf("accept a new client ,ip: %s\n", inet_ntoa(cli_addr.sin_addr));
    
-     pid = fork();
+    pid = fork();
     if(pid == 0) {
+	if(recv(conn_fd, buf, sizeof(buf), 0) < 0) {
+	    fprintf(stderr,"line:%d ",__LINE__);
+	}
+	c = atoi(buf);
+	switch(c) {
+	    case 1: zhuce(conn_fd);
+		    break;
+            case 2: break;
+	}
+}wait(NULL);
+}}
+
+
+void zhuce(int conn_fd)
+	{
+    		char 	recv_buf[128];
+		int     new_id;
+		FILE	*fp;	
+		struct person message;
+ 		char   *string="登陆成功";
 
 	if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) {
 	    fprintf(stderr, "line:%d\n",__LINE__);
@@ -71,7 +86,7 @@ int main()
 	
 	new_id = fen_id();
 	jiexi(recv_buf, new_id, message);	 
-	fp = fopen("number", "at");
+	fp = fopen("number.txt", "at");
 	if(fp == NULL) {
 	    fprintf(stderr, "line:%d\n", __LINE__);
 	}
@@ -84,8 +99,6 @@ int main()
 	    fprintf(stderr, "line:%d\n", __LINE__);
 	}	
 	
-} wait(NULL);
-}
 }
 
 void jiexi(char *recv_buf, int id,struct person message)
@@ -111,8 +124,9 @@ void jiexi(char *recv_buf, int id,struct person message)
  	passwd[i] = recv_buf[i];
 	passwd[len] = '\0';
 
+    
     memset(&message, 0, sizeof(struct person));
-    message.Id = id;
+    sprintf(message.Id, "%d", id);
     strcpy(message.username, username);
     strcpy(message.passwd, passwd);
 }
@@ -128,24 +142,34 @@ int fen_id(void)
     char string[8];
 
     if( (fp = fopen("number.txt", "rb+")) == NULL ) {
-	 fprintf(stderr, "line:%d\n", __LINE__);
+	fprintf(stderr, "line:%d\n", __LINE__);
+	if((fp = fopen("number.txt", "wt+")) == NULL) { 
+		fprintf(stderr, "line:%d ",__LINE__);
     }
-     
-    memset(&message, 0, sizeof(struct person));
-    message.Id == 10000;
-	
+    strcpy(message.Id, "10000");     
     if((fwrite(&message, sizeof(struct person), 1, fp)) == -1) {
 	fprintf(stderr, "line:%d\n", __LINE__);
+    }
+    fclose(fp);
+   }
+    
+
+    memset(&message, 0, sizeof(struct person));
+    if((fp = fopen("number.txt", "rb+")) == NULL) {
+	fprintf(stderr,"line:%d ", __LINE__);
     }
 
     if(fread(&message,sizeof(struct person), 1, fp) == 0) {
 	fprintf(stderr,"line:%d\n", __LINE__);
     }
     
-    id = message.Id;
+    id = atoi(message.Id);
+    printf("id:%d\n", id);
     id++;
 
-    itoa(id, string, 5);	    
+     if(sprintf(message.Id, "%d", id) <= 0) {
+	fprintf(stderr,"line:%d ",__LINE__); 
+    }   
 
     if(fseek(fp, 0, SEEK_SET) < 0) {
 	fprintf(stderr,"line:%d\n",__LINE__);
@@ -157,9 +181,8 @@ int fen_id(void)
 
     fclose(fp);
     return id;
-
-}	    
-	
+	    
+}
 
 	
 		
