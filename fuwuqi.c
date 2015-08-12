@@ -3,156 +3,166 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <string.h>
 #include <errno.h>
-#include "my_recv.c"
 
-
-#define PORT_NUM 9527	//端口号
-#define LISTENQ	 13 	//可建立的最大连接数
-
-struct person *read_file();
-void my_send(int conn_fd, const char *string);
- 
 struct person
 {
-    char	   Id[32];
-    char 	   Msg[32];
-    struct person  *next;
-}siliao;
+    int		Id;
+    char	username[32];
+    char	passwd[32];
+};
 
+void jiexi(char *recv_buf, int id,struct person message);
+int fen_id(void);
 
-int main(void)
-{
-    pid_t	       pid;	
-    int		       optval;
-    int		       sock_fd;					//服务器端套接字
-    int		       conn_fd;					//客户端套接字
-    int		       flag = 0;
-    int		       ret;
-    struct sockaddr_in serv_addr;				//定义服务器端套接字地址结构变量
-    struct sockaddr_in cli_addr;				//定义客户端套接字地址结构变量
-    struct person	*head;
-    struct person	*temp;
-    char 		*string;
-    socklen_t		cli_len; 
-   char 		recv_buf[128];
-    FILE   		*fp;
-    /*初始化服务器端地址结构*/
-    memset (&serv_addr, 0, sizeof(struct sockaddr_in) );	//将结构体清零
-    serv_addr.sin_family = AF_INET;				//地址类型,使用IPv4 TCP/IP协议
-    serv_addr.sin_port = htons(PORT_NUM);			//端口号,宏定义
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);		//IP地址,INADDR_ANY监听所有
+int main()
+{    
+    int   		sock_fd, conn_fd;
+    socklen_t   	cli_len;
+    char		choice;
+    struct person	 message;
+    struct person 	mess[80];
+    FILE 		 *fp;
+    char 		   *string = "注册成功";
+    struct sockaddr_in  cli_addr, serv_addr;
+    pid_t 		  pid;
+    int			new_id;
+    char 		recv_buf[128];
 
-    /*创建一个TCP套接字*/
-    sock_fd = socket(AF_INET, SOCK_STREAM, 0);			//AF_INET指定套接字使用的协议,SOCK_STREAM指定套接字类型
-    if (sock_fd == -1) {
-	my_err("socket ",__LINE__);
-    }
-
-    /*绑定端口*/
-    if(bind(sock_fd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr_in)) == -1) {  
-	my_err( "bind ",__LINE__);
-    }
-
-    /*转换为监听套接字*/
-    if(listen(sock_fd, LISTENQ) < 0) {				//LISTENQ为链接的客户端个数上限
-	my_err("listen ",__LINE__);
-    }
-
-    /*设置套接字属性*/
-    if(setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&optval,  //optval用来存放获得的套接字选项
-	sizeof(int)) < 0) {
-	my_err("setsocket", __LINE__);
-    }
-    cli_len = sizeof(struct sockaddr_in);
-    /*等待客户端链接*/
-    while(1) {
-	    conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr,		//通过accept接受客户端的请求
-	    &cli_len);
-	    if(conn_fd < 0) {
-		my_err("accept ", __LINE__);
-	    }    
-	    printf("Client from %s", inet_ntoa(cli_addr.sin_addr));		//cli_addr为客户端地址结构
-	    //创建一个子进程处理刚刚收到的连接请求
-	    if( (pid = fork()) == 0) {
-		while(1) {
-		    if((ret = recv(conn_fd, recv_buf, sizeof(recv_buf), 0)) < 0) {	//通过conn_fd接受数据存入recv_buf中
-			perror("recv");
-			exit(1);
-		    }
-		    recv_buf[ret-1] = '\0';		
-	            if(recv_buf[0] == '1') {				//此时选择注册账户
-			my_send(conn_fd, "1");			//发送账户过去
-			
-			if(my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
-			    my_err("recv",__LINE__);
-			}
-			/*判断从客户端收到的账户名是否已存在,存在返回'r',不存在返回'y'*/
-			head = read_file();
-			for(temp = head->next; temp != NULL; temp = temp->next) {
-			    if(strcmp(temp->Id, recv_buf) == 0 ) {
-				my_send(conn_fd, "r\n");
-				flag = 1;
-			    }
-      		        }
-			if(flag == 0) {
-			    my_send(conn_fd,"y\n");
-			    fp=fopen("number.txt","at");
-			    if(fp == NULL) {
-			        printf("打开文件失败\n");
-				exit(1);
-			    }
-			    fprintf(fp, "%s ", recv_buf);
-			    if(my_recv(conn_fd, recv_buf, sizeof(recv_buf)) < 0) {
-				my_err("recv ",__LINE__);
-			    }
-			    fprintf(fp,"%s\n", recv_buf);
-			    fclose(fp);
-			 }
-			}
-		}
-	}	
-	wait(NULL);
-		
-}}
-
-
-
-
-/********************************************
-   number.txt文件:存储已注册客户的昵称密码
-   struct person :存储用户昵称和密码
-   返回值:返回链表头指针
-   实现将文件中的信息存入链表
-*********************************************/
-struct person *read_file()
-{
-    struct person *phead,*r,*ptemp;
-    FILE *fp;
-
-    if((fp = fopen("number.txt", "rt")) == NULL) {
-	my_err("fopen", __LINE__);
-	exit(1);
-    }
-
-    phead = (struct person *)malloc(sizeof(struct person));
-    phead->next = NULL;
-    r = phead;
+    memset(&serv_addr, 0, sizeof(struct sockaddr_in));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(9527);
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+     
   
-    while(!feof(fp)) {
-	ptemp = (struct person *)malloc(sizeof(struct person));
-	fscanf(fp,"%s %s", ptemp->Id, ptemp->Msg);
-
-	r->next == ptemp;
-	r = ptemp;
+    if( (sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+	fprintf(stderr, "line: %d \n", __LINE__);
     }
+
+   
+    if(bind(sock_fd, (struct sockaddr *)&serv_addr, 
+	sizeof(struct sockaddr_in)) < 0) {
+	fprintf(stderr, "line: %d \n",__LINE__);
+    }
+
+
+    if(listen(sock_fd, 13) < 0) {
+	fprintf(stderr, "line:%d \n",__LINE__);
+    }
+/**********************************************************************************/
+    cli_len = sizeof(struct sockaddr_in);
+    while(1) {
+
+    conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr, &cli_len);
+    if(conn_fd < 0) {
+	fprintf(stderr, "line: %d\n",__LINE__);
+    }
+    printf("accept a new client ,ip: %s\n", inet_ntoa(cli_addr.sin_addr));
+   
+     pid = fork();
+    if(pid == 0) {
+
+	if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) {
+	    fprintf(stderr, "line:%d\n",__LINE__);
+        }
 	
-    r->next = NULL;
-    fclose(fp);
-    getchar();
-    return phead;
+	new_id = fen_id();
+	jiexi(recv_buf, new_id, message);	 
+	fp = fopen("number", "at");
+	if(fp == NULL) {
+	    fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	if(fwrite(&message, sizeof(struct person), 1, fp) == -1 ) {
+	    fprintf(stderr,"line:%d", __LINE__);
+	}
+	fclose(fp);
+	
+	if(send(conn_fd, string, strlen(string), 0) < 0) {
+	    fprintf(stderr, "line:%d\n", __LINE__);
+	}	
+	
+} wait(NULL);
 }
+}
+
+void jiexi(char *recv_buf, int id,struct person message)
+{
+    int t;   //记录#所在位置
+    int len;  
+    int i;
+    char username[32],passwd[32];
+ 
+    len = strlen(recv_buf);
+    for(i=0;i<len;i++) {
+	if(recv_buf[i] != '#') {
+	    t = i;
+	    break;
+	}
+    }
+
+    for(i=0; i<t; i++) 		//解析账号
+	username[i] = recv_buf[i];
+	username[t] = '\0';
+
+    for(i=t+1; i<len; i++)	//解析密码
+ 	passwd[i] = recv_buf[i];
+	passwd[len] = '\0';
+
+    memset(&message, 0, sizeof(struct person));
+    message.Id = id;
+    strcpy(message.username, username);
+    strcpy(message.passwd, passwd);
+}
+
+/*******************************
+        服务器分配ID
+********************************/
+int fen_id(void)
+{
+    FILE *fp;
+    struct person message;
+    int id;
+    char string[8];
+
+    if( (fp = fopen("number.txt", "rb+")) == NULL ) {
+	 fprintf(stderr, "line:%d\n", __LINE__);
+    }
+     
+    memset(&message, 0, sizeof(struct person));
+    message.Id == 10000;
+	
+    if((fwrite(&message, sizeof(struct person), 1, fp)) == -1) {
+	fprintf(stderr, "line:%d\n", __LINE__);
+    }
+
+    if(fread(&message,sizeof(struct person), 1, fp) == 0) {
+	fprintf(stderr,"line:%d\n", __LINE__);
+    }
+    
+    id = message.Id;
+    id++;
+
+    itoa(id, string, 5);	    
+
+    if(fseek(fp, 0, SEEK_SET) < 0) {
+	fprintf(stderr,"line:%d\n",__LINE__);
+    }
+
+    if(fwrite(&message, sizeof(struct person), 1, fp) == 0) {
+	fprintf(stderr,"line:%d\n",__LINE__);
+    }
+
+    fclose(fp);
+    return id;
+
+}	    
+	
+
+	
+		
+
+	
 	
