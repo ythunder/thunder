@@ -15,6 +15,8 @@ void my_err(const char *err_string, int line)
     exit(1);
 }
 
+void shenqing(int conn_fd);
+void login(int conn_fd);
 int main(int argc, char **argv)
 {
     int  i;
@@ -72,52 +74,97 @@ int main(int argc, char **argv)
 
 	printf("1.申请 2.登陆");
 	choice = getchar();
-	while(choice != '1' && choice != 2) {
+	while(choice != '1' && choice != '2') {
 	    printf("请重新选择");
 	    choice = getchar();
 	}
 	
 	switch(choice) {
-	    case '1':
-		if(send(conn_fd, "1", 1, 0) < 0) {
-		    fprintf(stderr, "line:%d ", __LINE__);
-		}
-		printf("账户名:");
-		scanf("%s", username);
-		while(strlen(username) > 32 ) {
-		    printf("错误,请重新输入:");
-		    scanf("%s", username);
-		}
-		
-		do {
-	 	    printf("密码:");
-		    scanf("%s", passwd1);
-		    printf("确认密码:");
-		    scanf("%s", passwd2);
-		    while(strcmp(passwd1,passwd2) != 0) {
-		     	printf("确认密码:");
-			scanf("%s", passwd2);
-			}
-		} while(strlen(passwd1) > 32);
-
-		strcpy(recv_buf, username);
-		len = strlen(recv_buf);
-		recv_buf[len] = '#';
-		recv_buf[len++] = '\0';
-		strcat(recv_buf, passwd1);
-		    
-		if(send(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
-	            fprintf(stderr, "line:%d\n", __LINE__);
-		}
-		printf("i have send the zhanghumima");
-		memset(&recv_buf, 0, sizeof(recv_buf));
-		if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
-	  	    fprintf(stderr, "line:%d\n", __LINE__);
-  		}
-	        for(i=0; i<9;i++) {
-		    printf("%c", recv_buf[i]);
-		}
-		break;
-	    case '2': printf(" ");
+	    case '1': shenqing(conn_fd);
 		      break;
-}	}
+	    case '2': login(conn_fd);
+ 		      break;
+	}
+    }
+
+void login(int conn_fd) 
+{
+    char    userid[8];
+    char    passwd[32];
+    char    recv_buf[128];
+    int	    len;
+
+    if(send(conn_fd, "2", 1, 0) < 0) {
+	fprintf(stderr,"line:%d ",__LINE__);
+    }
+    printf("ID:");
+    scanf("%s", userid);
+    printf("密码");
+    scanf("%s", passwd);
+ 
+    memset(&recv_buf, 0, sizeof(recv_buf));   
+    strcpy(recv_buf, userid);
+    len = strlen(recv_buf);
+    recv_buf[len] = '#';
+    len++;
+    recv_buf[len] = '\0';
+    strcat(recv_buf, passwd); 
+   
+    if(send(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) { //送出打包过的ID和密码
+	fprintf(stderr, "line:%d ",__LINE__);
+    }
+    
+       memset(&recv_buf, 0 ,sizeof(recv_buf));
+    if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) { //收到返回信息
+	fprintf(stderr, "line:%d ", __LINE__);
+    }
+    printf("%s\n",recv_buf);
+ }    
+
+
+void shenqing(int conn_fd)
+{	
+    char   username[32], passwd1[32], passwd2[32];
+    char   recv_buf[128];
+    int    len,i;	
+
+	if(send(conn_fd, "1", 1, 0) < 0) {
+	   fprintf(stderr, "line:%d ", __LINE__);
+	}
+	printf("账户名:");
+	scanf("%s", username);
+	while(strlen(username) > 32 ) {
+	    printf("错误,请重新输入:");
+	    scanf("%s", username);
+	}
+		
+	do {
+	    printf("密码:");
+	    scanf("%s", passwd1);
+	    printf("确认密码:");
+	    scanf("%s", passwd2);
+	    while(strcmp(passwd1,passwd2) != 0) {
+	    printf("确认密码:");
+	    scanf("%s", passwd2);
+	    }
+	} while(strlen(passwd1) > 32);
+
+	strcpy(recv_buf, username);
+	len = strlen(recv_buf);
+	recv_buf[len] = '#';
+	len++;
+	recv_buf[len] = '\0';
+	strcat(recv_buf, passwd1);
+		    
+	if(send(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
+	    fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	printf("i have send the zhanghumima");
+	memset(&recv_buf, 0, sizeof(recv_buf));
+	if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
+	fprintf(stderr, "line:%d\n", __LINE__);
+  	}
+	for(i=0; i<9;i++) {
+	   printf("%c", recv_buf[i]);
+	}
+    }	
