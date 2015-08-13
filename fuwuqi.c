@@ -11,13 +11,13 @@
 /*用户的ID,账户名,密码,存在number.txt中*/
 struct person
 {
-    char	Id[10];
+    char	Id[8];
     char	username[32];
     char	passwd[32];
 };
 
 /*将从客户端收到的账号密码及服务器分配的ID存入结构体*/
-void jiexi(char *recv_buf, int id,struct person message);
+void jiexi(char *recv_buf, int id,struct person *message);
 
 /*系统分配ID*/
 int fen_id(void);
@@ -63,6 +63,7 @@ int main()
     }
 /**********************************************************************************/
     cli_len = sizeof(struct sockaddr_in);
+  
     while(1) {
     conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr, &cli_len);
     if(conn_fd < 0) {
@@ -119,9 +120,7 @@ void denglu(int conn_fd)
 	use_msg[i-t-1] = recv_buf[i];
 	use_msg[len-t-1] = '\0';
  
-    printf("%s %s\n", use_id, use_msg);
     result = search(use_id, use_msg);
-    printf("%d\n", result);
     switch(result) {
 
 	case -1: 
@@ -182,19 +181,21 @@ int search(char Id[8], char msg[32])
 }
 void zhuce(int conn_fd)
 {
-    char 	recv_buf[128];
-    int     new_id;
-    FILE	*fp;	
+    char 	  recv_buf[128];
+    int           new_id;
+    FILE	  *fp;	
     struct person message;
-    char     *string="登陆成功";
+    char          *string="登陆成功";
 
     if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) { 
        fprintf(stderr, "line:%d\n",__LINE__);
     }
+	printf ("%s", recv_buf) ;
 	
     new_id = fen_id();
-    jiexi(recv_buf, new_id, message);	 
-    fp = fopen("number.txt", "at+");
+    jiexi(recv_buf, new_id, &message);
+printf ("asdadasdad:%s,%s\n", message.Id, message.passwd) ; 
+    fp = fopen("number.txt", "ab");
     if(fp == NULL) {
         fprintf(stderr, "line:%d\n", __LINE__);
     }
@@ -203,13 +204,13 @@ void zhuce(int conn_fd)
 	}
     fclose(fp);
 	
-    if(send(conn_fd, string, strlen(string), 0) < 0) {
+    if(send(conn_fd, string, sizeof(string), 0) < 0) {
        fprintf(stderr, "line:%d\n", __LINE__);
     }	
 	
 }
 
-void jiexi(char *recv_buf, int id,struct person message)
+void jiexi(char *recv_buf, int id,struct person *message)
 {
     int t;   //记录#所在位置
     int len;  
@@ -218,7 +219,7 @@ void jiexi(char *recv_buf, int id,struct person message)
  
     len = strlen(recv_buf);
     for(i=0;i<len;i++) {
-	if(recv_buf[i] != '#') {
+	if(recv_buf[i] == '#') {
 	    t = i;
 	    break;
 	}
@@ -233,10 +234,11 @@ void jiexi(char *recv_buf, int id,struct person message)
 	passwd[len-t-1] = '\0';
 
     
-    memset(&message, 0, sizeof(struct person));
-    sprintf(message.Id, "%d", id);
-    strcpy(message.username, username);
-    strcpy(message.passwd, passwd);
+    memset(message, 0, sizeof(struct person));
+    sprintf(message -> Id, "%d", id);
+    strcpy(message -> username, username);
+    strcpy(message -> passwd, passwd);
+	printf ("%s,%s,%s\n", message -> Id, message -> username, message -> passwd) ;
 }
 
 /*******************************
@@ -249,13 +251,12 @@ int fen_id(void)
     int id;
     char string[8];
 
-    if( (fp = fopen("number.txt", "rb+")) == NULL ) {
-	fprintf(stderr, "line:%d\n", __LINE__);
-	if((fp = fopen("number.txt", "wt+")) == NULL) { 
+    if( (fp = fopen("number.txt", "rb")) == NULL ) {
+	if((fp = fopen("number.txt", "wb+")) == NULL) { 
 		fprintf(stderr, "line:%d ",__LINE__);
-    }
-    strcpy(message.Id, "10000");     
-    if((fwrite(&message, sizeof(struct person), 1, fp)) == -1) {
+        }
+        strcpy(message.Id, "10000");     
+        if((fwrite(&message, sizeof(struct person), 1, fp)) == -1) {
 	fprintf(stderr, "line:%d\n", __LINE__);
     }
     fclose(fp);
