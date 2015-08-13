@@ -185,16 +185,16 @@ void zhuce(int conn_fd)
     int           new_id;
     FILE	  *fp;	
     struct person message;
-    char          *string="登陆成功";
+    char          string[20]="注册成功";
 
     if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) { 
        fprintf(stderr, "line:%d\n",__LINE__);
     }
-	printf ("%s", recv_buf) ;
+
 	
     new_id = fen_id();
     jiexi(recv_buf, new_id, &message);
-printf ("asdadasdad:%s,%s\n", message.Id, message.passwd) ; 
+
     fp = fopen("number.txt", "ab");
     if(fp == NULL) {
         fprintf(stderr, "line:%d\n", __LINE__);
@@ -203,7 +203,7 @@ printf ("asdadasdad:%s,%s\n", message.Id, message.passwd) ;
        fprintf(stderr,"line:%d", __LINE__);
 	}
     fclose(fp);
-	
+    
     if(send(conn_fd, string, sizeof(string), 0) < 0) {
        fprintf(stderr, "line:%d\n", __LINE__);
     }	
@@ -238,7 +238,7 @@ void jiexi(char *recv_buf, int id,struct person *message)
     sprintf(message -> Id, "%d", id);
     strcpy(message -> username, username);
     strcpy(message -> passwd, passwd);
-	printf ("%s,%s,%s\n", message -> Id, message -> username, message -> passwd) ;
+
 }
 
 /*******************************
@@ -250,6 +250,7 @@ int fen_id(void)
     struct person message;
     int id;
     char string[8];
+	memset (&message, 0, sizeof (struct person)) ;
 
     if( (fp = fopen("number.txt", "rb")) == NULL ) {
 	if((fp = fopen("number.txt", "wb+")) == NULL) { 
@@ -287,14 +288,8 @@ int fen_id(void)
     if(fwrite(&message, sizeof(struct person), 1, fp) == 0) {
 	fprintf(stderr,"line:%d\n",__LINE__);
     }
-
     fclose(fp);
-    return id;
+    return id-1;
 	    
 }
-
-	
-		
-
-	
 	
