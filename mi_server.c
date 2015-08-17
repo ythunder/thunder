@@ -1,0 +1,464 @@
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string.h>
+#include <errno.h>
+#include <pthread.h>
+
+/*用户的ID,账户名,密码,存在number.txt中*/
+struct person
+{
+    char	Id[8];
+    char	username[32];
+    char	passwd[32];
+};
+
+struct friends
+{
+    char		Id[8];
+    char 		username[32];
+    char                state[4];
+    struct friends 	*next;
+};
+
+struct chat
+{
+    int		cmd;
+    char	time[30];
+    char	from_id[8];
+    char 	to_id[8];
+    char	chat[500];
+
+};
+
+struct sockfd
+{
+    char   Id[8];
+    int    conn_fd;
+};
+
+
+struct my_friend
+{
+    char    Id[8];
+    char    username[32];
+    char    sex[3];
+    char    specil_sign[100];
+    struct my_friend *next;
+
+};
+
+
+/*将注册过的用户的信息写入文件friends*/
+void write_file_friends(char *user_id, char *username);
+
+/*将文件friends.txt中的信息读入链表*/
+struct friends *read_file_friends();	
+
+/*如果有人上线或下线,改变文件中用户状态*/
+void state_file_friends(struct friends *phead, char *id, char *string);
+
+/*将从客户端收到的账号密码及服务器分配的ID存入结构体*/
+void jiexi(char *recv_buf, int id,struct person *message);
+
+/*系统分配ID*/
+int fen_id(void);
+
+/*负责与客户端的通信,将结构体存入文件number.txt*/
+void zhuce(int conn_fd);
+
+/*解析传来的账户密码包，处理后返回id校验结果*/
+void denglu(int conn_fd);
+
+/*根据用户输入的ID密码在文件中查找校验，返回相应值*/
+int search(char *Id, char *msg);
+
+/*创建倾听套接字*/
+int sock_listen_fd();
+
+/*登录注册*/
+void login_register();
+/*登陆注册函数结合,方便开线程*/
+void *thread(int *fd);
+
+void main()
+{
+  login_register();
+}
+
+
+
+int sock_listen_fd()
+{
+    int   		sock_fd;
+    struct sockaddr_in  cli_addr, serv_addr;
+    
+    memset(&serv_addr, 0, sizeof(struct sockaddr_in));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(9999);
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+     
+  
+    if( (sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+	fprintf(stderr, "line: %d\n", __LINE__);
+    }
+
+   
+    if(bind(sock_fd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr_in)) < 0) {
+	fprintf(stderr, "line: %d \n",__LINE__);
+    }
+
+
+    if(listen(sock_fd, 13) < 0) {
+	fprintf(stderr, "line:%d \n",__LINE__);
+    }
+ 
+    return sock_fd;
+}
+
+
+
+void login_register()
+{
+    int		conn_fd, sock_fd;
+    socklen_t  cli_len;
+    pthread_t   thid;
+    char        buf[8];
+    int		c;
+    struct sockaddr_in cli_addr;
+
+    sock_fd = sock_listen_fd();
+    cli_len = sizeof(struct sockaddr_in);
+    while(1) {
+    conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr, &cli_len);
+    printf("%d\n", conn_fd);
+    if(conn_fd < 0) {
+	fprintf(stderr, "line: %d\n",__LINE__);
+    }
+    printf("accept a new client ,ip: %s\n", inet_ntoa(cli_addr.sin_addr));
+    
+    if(pthread_create(&thid, NULL, (void *)thread, &conn_fd) != 0) {
+	printf("线程调用失败\n");
+    }
+
+}}
+
+
+void *thread(int *fd)
+{	
+    int   c;
+    char   buf[8];
+        int conn_fd = *fd;
+	if(recv(conn_fd, buf, sizeof(buf), 0) < 0) {
+	    fprintf(stderr,"line:%d ",__LINE__);
+	}
+	c = atoi(buf);
+           
+	switch(c) {
+	    case 1: zhuce(conn_fd);
+		    break;
+            
+	    case 2: denglu(conn_fd);
+		    break;
+	}
+}
+
+void denglu(int conn_fd)
+{
+    char  recv_buf[128];
+    int   len, i, t, result;
+    char  use_id[8], use_msg[32], use_name[32];
+    char  *string1 = "登录失败";	
+    char  *string2 = "账户或者密码不正确";
+    char  *string3 = "登录成功";
+    struct friends *phead;
+    char  *string4 = "on"; 
+   
+    memset(&recv_buf, 0, sizeof(recv_buf));
+    if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
+	fprintf(stderr, "line:%d ",__LINE__);
+    }
+   
+    len = strlen(recv_buf); 
+    
+    for(i=0; i<len; i++) {
+	if(recv_buf[i] == '#') {
+	    t = i;
+	    break;
+	 }
+    }
+
+     memset(&use_id, 0, sizeof(use_id));
+     for(i=0; i<t; i++) 
+        use_id[i] = recv_buf[i];  
+	use_id[t] = '\0';
+
+    memset(&use_msg, 0, sizeof(use_msg));
+    for(i=t+1; i<len; i++)
+	use_msg[i-t-1] = recv_buf[i];
+	use_msg[len-t-1] = '\0';
+ 
+    result = search(use_id, use_msg);
+    switch(result) {
+
+	case -1: 
+		if(send(conn_fd, string1, strlen(string1), 0) < 0) {
+		    fprintf(stderr, "line:%d\n", __LINE__);
+		}
+		break;
+
+	case 0: 
+		if(send(conn_fd, string2, strlen(string2), 0) < 0) {
+		    fprintf(stderr, "line:%d\n", __LINE__);
+		}
+		break;
+
+	case 1: 
+		if(send(conn_fd, string3, strlen(string3), 0) < 0) {
+		    fprintf(stderr, "line:%d\n", __LINE__);
+		}
+		phead = read_file_friends();
+		state_file_friends(phead, use_id, string4);
+	        
+		break;
+    }	
+}
+
+
+int search(char *Id, char *msg)
+{
+    struct person  ptemp;
+    FILE 	   *fp = NULL;
+    int		   id,id_max;
+    int		    count;
+    memset(&ptemp, 0, sizeof(struct person));
+    id = atoi(Id);
+    if((fp = fopen("number.txt", "rb+")) == NULL) {
+        fprintf(stderr, "line:%d\n", __LINE__);
+	return -1;
+    } 
+    if(fread(&ptemp, sizeof(struct person), 1, fp) <= 0) {
+	fprintf(stderr, "line:%d\n", __LINE__); 
+	return -1;
+    }
+    id_max = atoi(ptemp.Id);
+    if(id > id_max || id < 10000) {
+	return 0;
+    }
+    else {
+	count =  id - 9999;
+	if(fseek(fp, count*sizeof(struct person), SEEK_SET) < 0) {
+	    fprintf(stderr, "line:%d\n",__LINE__);
+	    return -1;
+	}
+	if(fread(&ptemp, sizeof(struct person), 1, fp) <= 0) {
+	    fprintf(stderr, "line:%d\n", __LINE__);
+	    return -1;
+	}
+	if((strcmp(ptemp.Id, Id) == 0) && (strcmp(ptemp.passwd,msg) == 0)) {
+	    return 1;
+	}    
+	return 0;
+    }
+}
+
+
+
+
+
+void zhuce(int conn_fd)
+{
+    char 	  recv_buf[128];
+    int           new_id;
+    FILE	  *fp;	
+    struct person message;
+
+    if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) { 
+       fprintf(stderr, "line:%d\n",__LINE__);
+    }
+   printf("%s ", recv_buf);
+	
+    new_id = fen_id();
+    jiexi(recv_buf, new_id, &message);
+
+    fp = fopen("number.txt", "ab");
+    if(fp == NULL) {
+        fprintf(stderr, "line:%d\n", __LINE__);
+    }
+    if(fwrite(&message, sizeof(struct person), 1, fp) == -1 ) {
+       fprintf(stderr,"line:%d", __LINE__);
+    }
+    if(send(conn_fd, message.Id, sizeof(message.Id), 0) < 0) {
+	fprintf(stderr, "line:%d ", __LINE__);
+    }
+	
+    fclose(fp);
+      
+    write_file_friends(message.Id, message.username); 
+    	
+}
+
+void jiexi(char *recv_buf, int id,struct person *message)
+{
+    int t;   //记录#所在位置
+    int len;  
+    int i;
+    char username[32],passwd[32];
+ 
+    len = strlen(recv_buf);
+    for(i=0;i<len;i++) {
+	if(recv_buf[i] == '#') {
+	    t = i;
+	    break;
+	}
+    }
+
+    for(i=0; i<t; i++) 		//解析账号
+	username[i] = recv_buf[i];
+	username[t] = '\0';
+
+    for(i=t+1; i<len; i++)	//解析密码
+ 	passwd[i-t-1] = recv_buf[i];
+	passwd[len-t-1] = '\0';
+
+    
+    memset(message, 0, sizeof(struct person));
+    sprintf(message -> Id, "%d", id);
+    strcpy(message -> username, username);
+    strcpy(message -> passwd, passwd);
+
+}
+
+
+
+
+int fen_id(void)
+{
+    FILE *fp;
+    struct person message;
+    int id;
+    char string[8];
+	memset (&message, 0, sizeof (struct person)) ;
+
+    if( (fp = fopen("number.txt", "rb")) == NULL ) {
+	if((fp = fopen("number.txt", "wb+")) == NULL) { 
+		fprintf(stderr, "line:%d ",__LINE__);
+        }
+        strcpy(message.Id, "10000");     
+        if((fwrite(&message, sizeof(struct person), 1, fp)) == -1) {
+	fprintf(stderr, "line:%d\n", __LINE__);
+    }
+    fclose(fp);
+   }
+    
+
+    memset(&message, 0, sizeof(struct person));
+    if((fp = fopen("number.txt", "rb+")) == NULL) {
+	fprintf(stderr,"line:%d ", __LINE__);
+    }
+
+    if(fread(&message,sizeof(struct person), 1, fp) == 0) {
+	fprintf(stderr,"line:%d\n", __LINE__);
+    }
+    
+    id = atoi(message.Id);
+    id++;
+
+     if(sprintf(message.Id, "%d", id) <= 0) {
+	fprintf(stderr,"line:%d ",__LINE__); 
+    }   
+
+    if(fseek(fp, 0, SEEK_SET) < 0) {
+	fprintf(stderr,"line:%d\n",__LINE__);
+    }
+
+    if(fwrite(&message, sizeof(struct person), 1, fp) == 0) {
+	fprintf(stderr,"line:%d\n",__LINE__);
+    }
+    fclose(fp);
+    return id-1;
+	    
+}
+
+/*读出friends中的文件，返回头指针*/
+struct friends *read_file_friends()	
+{
+    FILE	*fp;
+    struct friends  *phead, *ptemp, *r;
+    if((fp = fopen("friends.txt", "rt")) == NULL) {	//只读，打开文件friends, 中存结构体(id ,username)
+	fprintf(stderr, "line:%d ", __LINE__);
+    }
+  
+    phead = (struct friends *)malloc(sizeof(struct friends));
+    phead->next = NULL;
+    r = phead;
+
+    while(!feof(fp)) {
+	
+	ptemp = (struct friends *)malloc(sizeof(struct friends));
+	fscanf(fp, "%s %s %s", ptemp->Id, ptemp->username, ptemp->state);
+
+	r->next = ptemp;
+	r = ptemp;
+    }
+    r->next = NULL;
+    fclose(fp);
+    return phead;
+   
+ }
+
+
+
+/*改变用户登陆状态*/
+void state_file_friends(struct friends *phead, char *id, char *string)
+{
+    FILE    *fp;
+    struct friends *ptemp;
+    
+    if((fp = fopen("friends.txt", "wt")) == NULL) {
+	fprintf(stderr, "line:%d ", __LINE__);
+    }
+
+    for(ptemp = phead->next; ptemp != NULL; ptemp = ptemp->next) {
+	if(strcmp(id, ptemp->Id) == 0) {
+		strcpy(ptemp->state,string);	
+	}
+	fprintf(fp, "%s %s %s\n", ptemp->Id, ptemp->username, ptemp->state);
+    }
+    fclose(fp);
+}
+
+/*将所有注册账号存入*/
+void write_file_friends(char *user_id, char *username)
+{
+    FILE	*fp;
+    
+    if((fp = fopen("friends.txt", "at")) == NULL) {
+	fprintf(stderr, "line:%d ", __LINE__);
+    }
+    
+    fprintf(fp, "%s %s %s\n", user_id, username, "off");
+    fclose(fp);
+}
+
+
+void get_cmd(int conn_fd)
+{
+    char   get_buf[800];
+    struct chat  privat;
+
+    if(recv(conn_fd, get_buf, sizeof(get_buf), 0) < 0) {
+	fprintf(stderr, "line:%d ", __LINE__);
+    }
+    
+    memcpy(&privat, get_buf, sizeof(struct chat));
+  
+    printf();
+   
+}
+
+void 
