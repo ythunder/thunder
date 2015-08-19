@@ -56,7 +56,7 @@ void group_chat_send(char *User_id);
 
 
 /*私聊接收*/
-void private_chat_recv(struct chat buf);
+int  private_chat_recv(struct chat buf);
 
 /*获取当前系统时间*/
 void get_time(char *time_buf);
@@ -92,8 +92,13 @@ void main(int argc, char **argv)
 	if(flag == 0) {
 		return;
 	}
-    
+
 	c = show_menus();
+    while(1) {
+
+	//if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
+	//	fprintf(stderr, "line:%d ", __LINE__);
+	//}
 	switch(c) {
 		case 1:   //发送私聊包
 			private_chat_send(User_id);
@@ -115,14 +120,14 @@ void main(int argc, char **argv)
 	if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
 		fprintf(stderr, "line:%d ", __LINE__);
 	}
-
+	}
 }
 
 void *thread()
 {
 	char	recv_buf[800];
 	struct chat  buf;
-
+	int c;
 	while(1) {
 	memset(recv_buf, 0, sizeof(recv_buf));
 	if(recv(conn_fd, recv_buf, sizeof(struct chat), 0) < 0) {
@@ -132,10 +137,14 @@ void *thread()
 	memset(&buf, 0, sizeof(struct chat));
 	memcpy(&buf, recv_buf, sizeof(struct chat));
 
+
 	switch(buf.option) {
 
 		case 1://私聊
-			private_chat_recv(buf);
+			 c = private_chat_recv(buf);
+			 if(c == 0) {
+			 return ;
+			 }
 			break;
 
 		case 2://群聊
@@ -202,6 +211,7 @@ void parameter(int argc, char **argv)
 void sock_login_register()
 {
     char	choice;
+//	pthread_t thid;
 
     conn_fd = socket(AF_INET, SOCK_STREAM, 0);
     if(conn_fd < 0) {
@@ -212,19 +222,27 @@ void sock_login_register()
  	 my_err("connect", __LINE__);
     }
 
-    printf("1.申请 2.登陆"); 
+
+    printf("1.申请 2.登陆, 3.退出"); 
     choice = getchar();
-    while(choice != '1' && choice != '2') {
+    while(choice != '1' && choice != '2'&&choice != '3') {
 	printf("请重新选择");
 	choice = getchar();
     }
 	 
+//	if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
+//		fprintf(stderr, "line:%d ", __LINE__);
+//	}
+
     switch(choice) {
 	case '1': shenqing(conn_fd);
 		  break;
 		  
 	case '2': login(conn_fd);
  		  break;
+
+	case '3':send(conn_fd, "3", 1, 0);
+			 exit(1);
     }
     
  }
@@ -351,13 +369,14 @@ void get_message(char *buf, int len)  //得到信息存入buf, buf长度Len
 {
     int   i=0;
     char  c;
-
-    c = getchar();
+   
+	
+	c = getchar();
     while((c != '\n')&&(i <= len-2)) {
 	buf[i] = c;
 	i++;
 	c = getchar();
-    }
+	}
     buf[i] = '\0';
 	
 }
@@ -372,27 +391,32 @@ void private_chat_send(char *User_id)
 	char to_id[8];
 
     memset(&private, 0, sizeof(struct chat));
-	printf("请输入你要添加人的ID");
-	scanf("%s", to_id);
+	printf("请输入您要发送人的Id:");
+	getchar();
+	get_message(to_id, 8);
     private.option = 1;
+	private.cmd = 's';
     get_time(time_buf);		//得到当前时间
     strcpy(private.time, time_buf); 
     strcpy(private.from_id, User_id);
     strcpy(private.to_id, to_id);
-    
-    get_message(chat_buf, 500);
-    strcpy(private.chat, chat_buf);
-    
+ 
+    while(1) {
+	printf("%s %s ", User_id, private.time);
+	memset(chat_buf, 0, sizeof(chat_buf));
+	printf("你说:");
+	get_message(private.chat, 500);
+
     memset(&buf, 0, sizeof(buf));
     memcpy(buf, &private, sizeof(struct chat));
 
-	if(send(conn_fd, buf, sizeof(buf), 0) < 0) {
-		fprintf(stderr, "line:%d ", __LINE__);
+	if(strcmp(chat_buf, "bye") == 0) {
+		send(conn_fd, "q", 1, 0);
+		return;
 	}
-	printf("%s  %s \n",User_id, time_buf);
-	printf("%s<<<<<", chat_buf);
-
-}
+	send(conn_fd, buf, sizeof(buf), 0);
+	printf("已发送");
+}}
 
 
 /*2.群聊*/
@@ -420,15 +444,21 @@ void group_chat_send(char *User_id)
 		fprintf(stderr, "line:%d ", __LINE__);
 	}
 	printf("%s  %s \n",User_id, time_buf);
-	printf("%s<<<<<", chat_buf);
+	printf("你说:%s", chat_buf);
 
 }
 
 /*私聊消息接收*/
-void private_chat_recv(struct chat buf)
+int  private_chat_recv(struct chat buf)
 {
-	printf("%s  %s", buf.from_id, buf.time);
-	printf(">>>>>%s", buf.chat);
+	if(buf.cmd == 'f') {
+		printf("该好友不在线,你不能和他聊");
+		return 0;
+	}
+
+	printf("%s  %s\n", buf.from_id, buf.time);
+	printf("他说:%s\n", buf.chat);
+	return 1;
 }
 
 
@@ -469,7 +499,8 @@ void add_friend_send(char *User_id)
     strcpy(addfriend.to_id, to_id);
     
     printf("请输入验证信息: ");
-    get_message(check_buf, 50);
+	getchar();
+	get_message(check_buf, 50);
     
     memset(&chat_buf, 0, sizeof(struct chat));
 
