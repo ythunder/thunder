@@ -175,13 +175,13 @@ void main()
 
 	optval = 1;
 
-	if(setsockopt(sock_fd, SOL_SOCKET,SO_REUSEADDR, (void *)&optval, sizeof(int)) < 0) {
+	if(setsockopt(sock_fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,  sizeof(int)) < 0) {
 		fprintf(stderr, "line:%d ",__LINE__);
 	}
 
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(9888);
+    serv_addr.sin_port = htons(9527);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
      
    
@@ -216,12 +216,12 @@ void login_register(int sock_fd)
 	fprintf(stderr, "line: %d\n",__LINE__);
     }
     printf("accept a new client ,ip: %s\n", inet_ntoa(cli_addr.sin_addr));
- 
+    
     if(pthread_create(&thid, NULL, (void *)thread, &conn_fd) != 0) {
 	printf("线程调用失败\n");
-    }
+    }}
 
-}}
+}
 
 
 
@@ -235,11 +235,12 @@ void *thread(int *fd)
 	struct chat buf;
 	int  success;
 	int		to_connfd;
-	struct sockfd  *ptemp;
+	struct sockfd  *ptemp=NULL;
 
 	if(recv(conn_fd, c_buf, sizeof(c_buf), 0) < 0) {
 	    fprintf(stderr,"line:%d ",__LINE__);
 	}
+
 	c = atoi(c_buf);
            
 	switch(c) {
@@ -249,17 +250,18 @@ void *thread(int *fd)
 	    case 2:success = denglu(conn_fd);
 	
 				if(success == 1) {
+					ptemp = (struct sockfd *)malloc(sizeof(struct sockfd));
 					ptemp->conn_fd = conn_fd;
 					strcpy(ptemp->Id,User_id);
 
 					phead = add_person(phead, ptemp);
-
-					while(1) {
 					memset(recv_buf, 0, sizeof(recv_buf));
-		
+		while(1) {
 					if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
 					fprintf(stderr, "line:%d ",__LINE__);
 					}
+					printf("已收到");
+
 					memset(&buf, 0, sizeof(struct chat));
 					memcpy(&buf, recv_buf, sizeof(struct chat));
 
@@ -284,11 +286,12 @@ void *thread(int *fd)
 						break;
 					}		
 					}
-				}
 			   break;
+				}
+		case 3: close(conn_fd);
+				break;
 	}
 }
-
 
 
 /*私聊处理*/
@@ -314,6 +317,7 @@ void private_chat(struct chat buf,int to_connfd)
 		if(send(to_connfd, send_buf, sizeof(send_buf), 0) < 0) {
 			fprintf(stderr, "line:%d ", __LINE__);
 		}
+		printf("已发出");
 	}
 }
 
@@ -506,11 +510,11 @@ int search(char *Id, char *msg)
     memset(&ptemp, 0, sizeof(struct person));
     id = atoi(Id);
     if((fp = fopen("number.txt", "rb+")) == NULL) {
-        fprintf(stderr, "line:%d\n", __LINE__);
+  //      fprintf(stderr, "line:%d\n", __LINE__);
 	return -1;
     } 
     if(fread(&ptemp, sizeof(struct person), 1, fp) <= 0) {
-	fprintf(stderr, "line:%d\n", __LINE__); 
+//	fprintf(stderr, "line:%d\n", __LINE__); 
 	return -1;
     }
     id_max = atoi(ptemp.Id);
@@ -520,11 +524,11 @@ int search(char *Id, char *msg)
     else {
 	count =  id - 9999;
 	if(fseek(fp, count*sizeof(struct person), SEEK_SET) < 0) {
-	    fprintf(stderr, "line:%d\n",__LINE__);
+	//    fprintf(stderr, "line:%d\n",__LINE__);
 	    return -1;
 	}
 	if(fread(&ptemp, sizeof(struct person), 1, fp) <= 0) {
-	    fprintf(stderr, "line:%d\n", __LINE__);
+	 //   fprintf(stderr, "line:%d\n", __LINE__);
 	    return -1;
 	}
 	if((strcmp(ptemp.Id, Id) == 0) && (strcmp(ptemp.passwd,msg) == 0)) {
