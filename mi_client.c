@@ -54,6 +54,9 @@ void private_chat_send(char *User_id);
 /*群聊*/
 void group_chat_send(char *User_id);
 
+/*群聊接收*/
+int group_chat_recv(struct chat buf);
+
 
 /*私聊接收*/
 int  private_chat_recv(struct chat buf);
@@ -92,13 +95,15 @@ void main(int argc, char **argv)
 	if(flag == 0) {
 		return;
 	}
+	
+	if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
+		fprintf(stderr, "line:%d ", __LINE__);
+	}
 
-	c = show_menus();
-    while(1) {
+	while(1) {
 
-	//if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
-	//	fprintf(stderr, "line:%d ", __LINE__);
-	//}
+		c = show_menus();
+
 	switch(c) {
 		case 1:   //发送私聊包
 			private_chat_send(User_id);
@@ -117,9 +122,7 @@ void main(int argc, char **argv)
 			break;
 
 	}
-	if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
-		fprintf(stderr, "line:%d ", __LINE__);
-	}
+
 	}
 }
 
@@ -130,7 +133,7 @@ void *thread()
 	int c;
 	while(1) {
 	memset(recv_buf, 0, sizeof(recv_buf));
-	if(recv(conn_fd, recv_buf, sizeof(struct chat), 0) < 0) {
+	if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
 		fprintf(stderr, "line:%d ", __LINE__);
 	}
 
@@ -143,12 +146,15 @@ void *thread()
 		case 1://私聊
 			 c = private_chat_recv(buf);
 			 if(c == 0) {
-			 return ;
-			 }
+				 return;
+			}
 			break;
 
 		case 2://群聊
-			private_chat_recv(buf);
+			c = group_chat_recv(buf);
+			if(c == 0) {
+				return;
+			}
 			break;
 
 		case 3://添加好友
@@ -225,7 +231,7 @@ void sock_login_register()
 
     printf("1.申请 2.登陆, 3.退出"); 
     choice = getchar();
-    while(choice != '1' && choice != '2'&&choice != '3') {
+    while(choice != '1' && choice != '2' && choice != '3') {
 	printf("请重新选择");
 	choice = getchar();
     }
@@ -243,6 +249,7 @@ void sock_login_register()
 
 	case '3':send(conn_fd, "3", 1, 0);
 			 exit(1);
+			 break;
     }
     
  }
@@ -349,6 +356,7 @@ int  show_menus()
     char	choice;
 
     do {
+	getchar();
     printf("1.私聊\n");
     printf("2.群聊\n");
     printf("3.添加好友\n");
@@ -358,8 +366,9 @@ int  show_menus()
     printf("7.服务器日志\n");
     printf("8.退出\n");
     choice = getchar();
-   }while(choice < '1' || choice > '7');
 
+   }while(choice < '1' || choice > '7');
+	
 	return (choice - '0');
 }
 
@@ -410,13 +419,12 @@ void private_chat_send(char *User_id)
     memset(&buf, 0, sizeof(buf));
     memcpy(buf, &private, sizeof(struct chat));
 
-	if(strcmp(chat_buf, "bye") == 0) {
-		send(conn_fd, "q", 1, 0);
+	send(conn_fd, buf, sizeof(buf), 0);
+	if(strcmp(private.chat, "bye") == 0) {
 		return;
 	}
-	send(conn_fd, buf, sizeof(buf), 0);
-	printf("已发送");
-}}
+	}
+}
 
 
 /*2.群聊*/
@@ -434,30 +442,47 @@ void group_chat_send(char *User_id)
     strcpy(group.time, time_buf); 
     strcpy(group.from_id, User_id);
     
-    get_message(chat_buf, 500);
-    strcpy(group.chat, chat_buf);
-    
+    while(1) {
+	printf("%s  %s \n",User_id, time_buf);
+	printf("你说:");
+	get_message(group.chat, 500);
+
     memset(&buf, 0, sizeof(buf));
     memcpy(buf, &group, sizeof(struct chat));
 
 	if(send(conn_fd, buf, sizeof(buf), 0) < 0) {
 		fprintf(stderr, "line:%d ", __LINE__);
 	}
-	printf("%s  %s \n",User_id, time_buf);
-	printf("你说:%s", chat_buf);
-
+	if(strcmp(group.chat,"bye") == 0) {
+		return;
+	}
+	}
 }
 
 /*私聊消息接收*/
 int  private_chat_recv(struct chat buf)
 {
 	if(buf.cmd == 'f') {
-		printf("该好友不在线,你不能和他聊");
+		printf("该好友不在线或此号不存在,你不能和他聊");
 		return 0;
 	}
-
+	
 	printf("%s  %s\n", buf.from_id, buf.time);
 	printf("他说:%s\n", buf.chat);
+	return 1;
+}
+
+
+
+/*群聊消息接收*/
+int group_chat_recv(struct chat buf)
+{
+	if(buf.cmd == 'p') {
+		printf("当前无人在线,你别发了");
+		return 0;
+	}
+	printf("%s %s\n", buf.from_id, buf.time);
+	printf("他说:%s\n",buf.chat);
 	return 1;
 }
 
@@ -502,7 +527,7 @@ void add_friend_send(char *User_id)
 	getchar();
 	get_message(check_buf, 50);
     
-    memset(&chat_buf, 0, sizeof(struct chat));
+    memset(&chat_buf, 0, sizeof(chat_buf));
 
     strcpy(chat_buf, ask_buf);
     strcat(chat_buf, check_buf);
@@ -524,45 +549,45 @@ void add_friend_send(char *User_id)
 void addfriend_recv(struct chat buf)
 {	
 	char	send_buf[800];
-	char	choice;
+	char		choice;
 	if(buf.cmd == '?')		//buf 为 struct chat buf,被调用时的全局变量, "?"为服务器处理接受请求信息做的处理
 	{
 		printf("用户%s 请求添加您为好友\n", buf.from_id);
-		printf("%s", buf.chat);
+		printf("验证消息:%s", buf.chat);
 
-		printf("同意(y)或拒绝(n)\n");
-		choice = getchar();
+		printf("同意(y) 拒绝(n)\n");
+		scanf("%c", &choice);
 		
 		if(choice == 'y') {		
 			buf.cmd = 'y';
 			strcpy(buf.chat,"用户同意了您的添加请求.");
-			memset(&send_buf, 0, sizeof(buf));
+			memset(&send_buf, 0, sizeof(send_buf));
 			memcpy(send_buf, &buf, sizeof(struct chat));
 			if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
 				fprintf(stderr, "line:%d ", __LINE__);
 			}
 			printf("添加成功");
-			getchar();
+			return;
 		}
 		else {
 			buf.cmd = 'n';
 			strcpy(buf.chat, "用户拒绝了你的添加请求.");
-			memset(&send_buf, 0, sizeof(buf));
+			memset(&send_buf, 0, sizeof(send_buf));
 			memcpy(send_buf, &buf, sizeof(struct chat));
 			if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
 				fprintf(stderr, "line:%d ",__LINE__);
 			}
 			printf("已拒绝");
-			getchar();
+			return;
 		}
 	}
 	else if(buf.cmd == 'y') {
 			printf("您已成功添加 %s 为好友", buf.to_id);
-		} else {
-			printf("对方拒绝了您的添加请求,请节哀顺变.");
-		}
-		getchar();
-			
+			return;
+		} else if(buf.cmd == 'n') {
+			printf("添加失败,请节哀顺变.");
+			return;
+		}	
 }
 
 /*删除好友信息*/
