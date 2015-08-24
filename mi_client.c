@@ -21,13 +21,20 @@ struct chat
 
 };
 
+/*自己的好友名单*/
+struct my_friend
+{
+	char	Id[8];
+	struct my_friend *next;
 
+}
 
 /*==================================================*/
 int   conn_fd;
 int   serv_port;
 struct sockaddr_in  serv_addr;           // 全局变量
 char	User_id[8];		//用户自己的账户
+struct chat buf_q;
 /*===================================================*/
 
 /*接受消息处理线程*/
@@ -51,6 +58,8 @@ void get_message(char *buf, int len);  //得到信息存入buf, buf长度Len
 /*私聊消息发送*/
 void private_chat_send(char *User_id);
 
+
+char show_menus();
 /*群聊*/
 void group_chat_send(char *User_id);
 
@@ -65,13 +74,25 @@ int  private_chat_recv(struct chat buf);
 void get_time(char *time_buf);
 
 /*请求添加好友函数*/
-void add_friend_send(char *User_id);
+struct chat add_friend_send(char *User_id);
 
 /*好友请求处理函数*/
 void addfriend_recv(struct chat buf);
 
 /*删除好友请求*/
 void delete_friend_send(char *User_id);
+
+void addfriend_y();
+
+void addfriend_n();
+
+/*请求在线好友名单*/
+void ask_online_person(char *User_id);
+
+/*处理服务器送还的在线好友ID*/
+void print_online(struct chat buf);
+
+
 
 int flag = 0;
 
@@ -86,7 +107,7 @@ void my_err(const char *err_string, int line)
 void main(int argc, char **argv)
 {
 	pthread_t	thid;
-    int			c;
+    char		c;
 
 	parameter(argc, argv);  
     
@@ -105,21 +126,33 @@ void main(int argc, char **argv)
 		c = show_menus();
 
 	switch(c) {
-		case 1:   //发送私聊包
+		case '1':   //发送私聊包
 			private_chat_send(User_id);
 			break;
 
-		case 2:		//发送群聊包
+		case '2':		//发送群聊包
 			group_chat_send(User_id);
 			break;
 
-		case 3:
-			add_friend_send(User_id);
+		case '3':
+			 add_friend_send(User_id);
 			break;
 
-		case 4:
+		case '4':
 			delete_friend_send(User_id);
 			break;
+
+		case '5': //发送请求在线名单包
+			ask_online_person(User_id);
+			break;
+
+		case 'y':
+			addfriend_y();
+			   break;
+
+		case 'n':
+			 addfriend_n();
+				break;
 
 	}
 
@@ -158,7 +191,7 @@ void *thread()
 			break;
 
 		case 3://添加好友
-			addfriend_recv(buf);
+			 addfriend_recv(buf);
 			break;
 
 		case 4://删除好友
@@ -167,11 +200,16 @@ void *thread()
 			}
 			break;
 
+		case 5://显示在线人
+			print_online(buf);
+			break;
 	}
 
 }
-}
 
+
+
+}
 void parameter(int argc, char **argv)
 {
     int   i;
@@ -211,6 +249,38 @@ void parameter(int argc, char **argv)
 	}
 }
 
+void addfriend_y()
+{
+	
+	char	send_buf[800];
+
+			buf_q.cmd = 'y';
+			printf("AAA");
+			strcpy(buf_q.chat,"用户同意了您的添加请求.");
+			memset(&send_buf, 0, sizeof(send_buf));
+			memcpy(send_buf, &buf_q, sizeof(struct chat));
+			if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
+				fprintf(stderr, "line:%d ", __LINE__);
+			}
+			printf("添加成功");
+		
+}
+
+void addfriend_n()
+{
+	char	send_buf[800];
+
+			buf_q.cmd = 'n';
+			strcpy(buf_q.chat, "用户拒绝了你的添加请求.");
+			memset(&send_buf, 0, sizeof(send_buf));
+			printf("%s\n", buf_q.from_id);
+
+			memcpy(send_buf, &buf_q, sizeof(struct chat));
+			if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
+				fprintf(stderr, "line:%d ",__LINE__);
+			}
+			printf("已拒绝");
+}	
 
 
 
@@ -218,6 +288,7 @@ void sock_login_register()
 {
     char	choice;
 //	pthread_t thid;
+
 
     conn_fd = socket(AF_INET, SOCK_STREAM, 0);
     if(conn_fd < 0) {
@@ -228,7 +299,6 @@ void sock_login_register()
  	 my_err("connect", __LINE__);
     }
 
-
     printf("1.申请 2.登陆, 3.退出"); 
     choice = getchar();
     while(choice != '1' && choice != '2' && choice != '3') {
@@ -236,10 +306,6 @@ void sock_login_register()
 	choice = getchar();
     }
 	 
-//	if(pthread_create(&thid, NULL, (void *)thread, NULL) != 0) {
-//		fprintf(stderr, "line:%d ", __LINE__);
-//	}
-
     switch(choice) {
 	case '1': shenqing(conn_fd);
 		  break;
@@ -283,11 +349,15 @@ void login(int conn_fd)
     }
     
        memset(&recv_buf, 0 ,sizeof(recv_buf));
-    if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) { //收到返回信息
+  
+	if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) { //收到返回信息
 	fprintf(stderr, "line:%d ", __LINE__);
 	}  
 	if(strcmp(recv_buf,"-1") == 0) {
 		printf("登陆失败\n");
+	}
+	if(strcmp(recv_buf, "2") == 0) {
+		printf("此账号已登陆");
 	}
 	if(strcmp(recv_buf, "0") == 0) {
 		printf("账号或者密码不正确\n");
@@ -351,25 +421,31 @@ void shenqing(int conn_fd)
     }	
 
 
-int  show_menus()
+char  show_menus()
 {
     char	choice;
 
-    do {
-	getchar();
+ //   do {
+
+	//getchar();
+	while(1) {
     printf("1.私聊\n");
     printf("2.群聊\n");
     printf("3.添加好友\n");
     printf("4.删除好友\n");
-    printf("5.在线好友\n");
-    printf("6.查看好友资料\n");
+    printf("5.在线人\n");
+    printf("6.所有好友\n");
     printf("7.服务器日志\n");
     printf("8.退出\n");
-    choice = getchar();
+	printf("请选择:\n");
+	scanf("%c", &choice);
+		if((choice >='1' && choice <= '8') || (choice == 'y') || choice == 'n') {
+			break;
+		}
 
-   }while(choice < '1' || choice > '7');
+   }
 	
-	return (choice - '0');
+	return choice;
 }
 
 
@@ -403,6 +479,11 @@ void private_chat_send(char *User_id)
 	printf("请输入您要发送人的Id:");
 	getchar();
 	get_message(to_id, 8);
+	while(strcmp(to_id, User_id) == 0) {
+		printf("您不能和自己聊天,请重新输入:");
+		memset(&to_id, 0, sizeof(to_id));
+		get_message(to_id, 8);
+	}
     private.option = 1;
 	private.cmd = 's';
     get_time(time_buf);		//得到当前时间
@@ -459,6 +540,34 @@ void group_chat_send(char *User_id)
 	}
 }
 
+
+/*送出在线好友请求*/
+void ask_online_person(char *User_id) 
+{
+	struct chat online;
+	char        buf[800];
+
+	memset(&online, 0, sizeof(struct chat));
+
+	online.option = 5;
+	strcpy(online.from_id, User_id);
+
+	memset(&buf, 0, sizeof(buf));
+	memcpy(buf, &online, sizeof(struct chat));
+
+	if(send(conn_fd, buf, sizeof(buf), 0) < 0) {
+		fprintf(stderr, "line;%d\n", __LINE__);
+	}
+}
+
+/*收到在线好友消息*/
+void print_online(struct chat buf)
+{
+	printf(" ----------\n");
+	printf("|   %s   |\n", buf.to_id);
+}
+
+
 /*私聊消息接收*/
 int  private_chat_recv(struct chat buf)
 {
@@ -502,7 +611,7 @@ void get_time(char *time_buf)
 
 
 /*3.添加好友*/
-void add_friend_send(char *User_id)
+struct chat  add_friend_send(char *User_id)
 {
     struct chat addfriend;
     char        time_buf[30];
@@ -516,6 +625,16 @@ void add_friend_send(char *User_id)
     memset(&addfriend, 0, sizeof(struct chat));
 	printf("输入您要添加的用户");
 	scanf("%s",to_id);
+	while(strcmp(to_id, User_id) == 0) {
+		printf("您不能添加自己为好友, 请重新输入:");
+		memset(&to_id, 0, sizeof(to_id));
+		scanf("%s", to_id);
+	}
+    s = find_friend(to_id);
+	if(s == 1) {
+			
+	
+	}
     addfriend.option = 3;
 	addfriend.cmd = '?';
     get_time(time_buf);
@@ -541,6 +660,7 @@ void add_friend_send(char *User_id)
     if(send(conn_fd, buf, sizeof(buf), 0) < 0) {
 	fprintf(stderr, "line:%d ", __LINE__);
     }
+	return addfriend;
 }
 
 
@@ -553,40 +673,18 @@ void addfriend_recv(struct chat buf)
 	if(buf.cmd == '?')		//buf 为 struct chat buf,被调用时的全局变量, "?"为服务器处理接受请求信息做的处理
 	{
 		printf("用户%s 请求添加您为好友\n", buf.from_id);
-		printf("验证消息:%s", buf.chat);
-
+		printf("验证消息:%s\n", buf.chat);
+		buf_q = buf;
 		printf("同意(y) 拒绝(n)\n");
-		scanf("%c", &choice);
-		
-		if(choice == 'y') {		
-			buf.cmd = 'y';
-			strcpy(buf.chat,"用户同意了您的添加请求.");
-			memset(&send_buf, 0, sizeof(send_buf));
-			memcpy(send_buf, &buf, sizeof(struct chat));
-			if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
-				fprintf(stderr, "line:%d ", __LINE__);
-			}
-			printf("添加成功");
-			return;
-		}
-		else {
-			buf.cmd = 'n';
-			strcpy(buf.chat, "用户拒绝了你的添加请求.");
-			memset(&send_buf, 0, sizeof(send_buf));
-			memcpy(send_buf, &buf, sizeof(struct chat));
-			if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
-				fprintf(stderr, "line:%d ",__LINE__);
-			}
-			printf("已拒绝");
-			return;
-		}
+	//	scanf("%c", &choice);
 	}
+
 	else if(buf.cmd == 'y') {
 			printf("您已成功添加 %s 为好友", buf.to_id);
-			return;
+			
 		} else if(buf.cmd == 'n') {
-			printf("添加失败,请节哀顺变.");
-			return;
+			printf("添加失败.");
+		
 		}	
 }
 
@@ -618,4 +716,48 @@ void delete_friend_send(char *User_id)
 	printf("删除成功!");
 }
 
-//
+
+
+/*读出自己的好友账号, 返回头指针*/
+struct my_friend *my_friend_link(char *filename)
+{
+	FILE *fp;
+	struct my_friend *head, *temp, *r;
+	if((fp = fopen(filename, "r")) == NULL) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+
+	head = (struct my_friend *)malloc(sizeof(struct my_friend));
+	head -> next = NULL;
+	r = head;
+
+	while(!feof(fp)) {
+	
+		temp = (struct my_friend *)malloc(sizeof(struct my_friend));
+		fscanf(fp, "%s", temp -> Id);
+
+		r -> next = temp;
+		r = temp;
+	}
+	r -> next =	NULL;
+	fclose(fp);
+	return head;
+	
+}
+
+/*查找是否有此好友*/
+int find_friend(char *add_id)
+{
+	struct my_friend *head, temp;
+	
+	head = my_friend_link(User_id);
+
+	for(temp = head; temp != NULL; temp = temp -> next) {
+	
+		if(strcmp(temp -> Id, add_id) == 0) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
