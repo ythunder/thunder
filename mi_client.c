@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <string.h>
+#include <pthread.h>
 
 
 struct chat
@@ -27,7 +29,20 @@ struct my_friend
 	char	Id[8];
 	struct my_friend *next;
 
-}
+};
+
+
+/*存储聊天记录*/
+struct chat_records
+{
+	char	Id[8];
+	char	time[30];
+	char	chat[500];
+	struct chat_records *next; 
+};
+
+
+
 
 /*==================================================*/
 int   conn_fd;
@@ -37,6 +52,13 @@ char	User_id[8];		//用户自己的账户
 struct chat buf_q;
 /*===================================================*/
 
+/*将好友名单读入链表*/
+struct my_friend *my_friend_link(char *filename);
+
+/*输出好友名单*/
+void print_my_friends(struct my_friend *head);
+
+	
 /*接受消息处理线程*/
 void *thread();
 
@@ -92,8 +114,24 @@ void ask_online_person(char *User_id);
 /*处理服务器送还的在线好友ID*/
 void print_online(struct chat buf);
 
+/*读出好友信息存入链表*/
+struct my_friend *my_friend_link(char *filename);
+
+/*查找是否存在add_id*/
+int find_friend(char *add_id);
+
+/*将聊天记录信息读入链表*/
+struct chat_records *chat_record_link(char *filename);
+
+/*查看聊天记录*/
+void view_chat_records();
+
+/*退出ID*/
+void exit_id();
 
 
+/*输出聊天记录*/
+void print_chat_records(struct chat_records *head);
 int flag = 0;
 
 void my_err(const char *err_string, int line) 
@@ -108,6 +146,7 @@ void main(int argc, char **argv)
 {
 	pthread_t	thid;
     char		c;
+	struct my_friend  *head;
 
 	parameter(argc, argv);  
     
@@ -144,6 +183,19 @@ void main(int argc, char **argv)
 
 		case '5': //发送请求在线名单包
 			ask_online_person(User_id);
+			break;
+
+		case '6'://
+			head = my_friend_link(User_id);
+			print_my_friends(head);
+			break;
+
+		case '7'://聊天记录
+			view_chat_records();
+			break;
+
+		case '8'://退出
+			exit_id();
 			break;
 
 		case 'y':
@@ -202,6 +254,12 @@ void *thread()
 
 		case 5://显示在线人
 			print_online(buf);
+			break;
+
+		case 8://退出
+			if(buf.cmd == 'y') {
+				printf("成功退出");
+			}
 			break;
 	}
 
@@ -435,8 +493,9 @@ char  show_menus()
     printf("4.删除好友\n");
     printf("5.在线人\n");
     printf("6.所有好友\n");
-    printf("7.服务器日志\n");
-    printf("8.退出\n");
+	printf("7.聊天记录");
+    printf("8.服务器日志\n");
+    printf("9.退出\n");
 	printf("请选择:\n");
 	scanf("%c", &choice);
 		if((choice >='1' && choice <= '8') || (choice == 'y') || choice == 'n') {
@@ -466,6 +525,24 @@ void get_message(char *buf, int len)  //得到信息存入buf, buf长度Len
 	
 }
 
+/*退出*/
+void exit_id()
+{
+	struct chat  exit;
+	char	chat_buf[500];
+	char    buf[800];
+	char	time_buf[30];
+
+	exit.option = 8;
+	strcpy(exit.from_id, User_id);
+	get_time(time_buf);
+	strcpy(exit.time, time_buf);
+	memcpy(buf, &exit, sizeof(struct chat));
+
+	send(conn_fd, buf, sizeof(buf), 0);
+}
+
+
 /*1.私聊*/
 void private_chat_send(char *User_id) 
 {   
@@ -474,6 +551,9 @@ void private_chat_send(char *User_id)
     char chat_buf[500];
     char buf[800];
 	char to_id[8];
+	char filename[17];
+	FILE *fp;
+	struct chat_records	  Buf;
 
     memset(&private, 0, sizeof(struct chat));
 	printf("请输入您要发送人的Id:");
@@ -496,6 +576,24 @@ void private_chat_send(char *User_id)
 	memset(chat_buf, 0, sizeof(chat_buf));
 	printf("你说:");
 	get_message(private.chat, 500);
+	
+	memset(&filename, 0, sizeof(filename));
+	strcpy(filename, User_id);
+	strcat(filename, to_id);
+
+	if((fp = fopen(filename, "ab+")) == NULL) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	
+	strcpy(Buf.Id, User_id);
+	strcpy(Buf.time, private.time);
+	strcpy(Buf.chat, private.chat);
+
+	if((fwrite(&Buf, sizeof(struct chat_records), 1, fp)) == -1) {
+			
+	fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	fclose(fp);
 
     memset(&buf, 0, sizeof(buf));
     memcpy(buf, &private, sizeof(struct chat));
@@ -508,6 +606,7 @@ void private_chat_send(char *User_id)
 }
 
 
+
 /*2.群聊*/
 void group_chat_send(char *User_id) 
 {   
@@ -515,7 +614,9 @@ void group_chat_send(char *User_id)
     char time_buf[30];
     char chat_buf[500];
     char buf[800];
-    
+    FILE *fp;
+	struct chat_records   Buf;
+
     memset(&group, 0, sizeof(struct chat));
 
     group.option = 2;
@@ -524,9 +625,24 @@ void group_chat_send(char *User_id)
     strcpy(group.from_id, User_id);
     
     while(1) {
-	printf("%s  %s \n",User_id, time_buf);
+	printf("%s  %s ",User_id, time_buf);
 	printf("你说:");
 	get_message(group.chat, 500);
+
+
+	if((fp = fopen("groupchat", "ab+")) == NULL) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	
+	strcpy(Buf.Id, User_id);
+	strcpy(Buf.time, group.time);
+	strcpy(Buf.chat, group.chat);
+
+	if((fwrite(&Buf, sizeof(struct chat_records), 1, fp)) == -1) {
+			
+	fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	fclose(fp);
 
     memset(&buf, 0, sizeof(buf));
     memcpy(buf, &group, sizeof(struct chat));
@@ -560,7 +676,7 @@ void ask_online_person(char *User_id)
 	}
 }
 
-/*收到在线好友消息*/
+/*收到在线好友名单*/
 void print_online(struct chat buf)
 {
 	printf(" ----------\n");
@@ -571,13 +687,36 @@ void print_online(struct chat buf)
 /*私聊消息接收*/
 int  private_chat_recv(struct chat buf)
 {
+	char filename[17];
+	FILE *fp;
+	struct chat_records    Buf;
+
 	if(buf.cmd == 'f') {
 		printf("该好友不在线或此号不存在,你不能和他聊");
 		return 0;
 	}
 	
-	printf("%s  %s\n", buf.from_id, buf.time);
+	printf("%s  %s", buf.from_id, buf.time);
 	printf("他说:%s\n", buf.chat);
+
+	memset(&filename, 0, sizeof(filename));
+	strcpy(filename, User_id);
+	strcat(filename, buf.from_id);
+	
+	if((fp = fopen(filename, "ab+")) == NULL) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	
+	strcpy(Buf.Id, buf.from_id);
+	strcpy(Buf.time, buf.time);
+	strcpy(Buf.chat, buf.chat);
+
+	if((fwrite(&Buf, sizeof(struct chat_records), 1, fp)) == -1) {
+			
+	fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	fclose(fp);
+
 	return 1;
 }
 
@@ -586,12 +725,16 @@ int  private_chat_recv(struct chat buf)
 /*群聊消息接收*/
 int group_chat_recv(struct chat buf)
 {
+	FILE  *fp;
+	struct chat_records   Buf;
+
 	if(buf.cmd == 'p') {
 		printf("当前无人在线,你别发了");
 		return 0;
 	}
 	printf("%s %s\n", buf.from_id, buf.time);
 	printf("他说:%s\n",buf.chat);
+
 	return 1;
 }
 
@@ -621,20 +764,26 @@ struct chat  add_friend_send(char *User_id)
 	char    buf[800];
 	char	request_buf[20];
 	char	to_id[8];
+	int     a;
+	int     s;
 
     memset(&addfriend, 0, sizeof(struct chat));
 	printf("输入您要添加的用户");
 	scanf("%s",to_id);
-	while(strcmp(to_id, User_id) == 0) {
-		printf("您不能添加自己为好友, 请重新输入:");
-		memset(&to_id, 0, sizeof(to_id));
-		scanf("%s", to_id);
-	}
-    s = find_friend(to_id);
-	if(s == 1) {
-			
+	a = strcmp(to_id, User_id);
+	s = find_friend(to_id);
+	if(a == 0 || s == 1) {
+		if(a == 0) {
+			printf("您不能添加自己为好友\n\n");
+			return;
+		}
+		if(s == 1) {
+			printf("TA是你的好友\n不能重复添加\n\n");
+			return;
+		}
 	
-	}
+	}	
+			
     addfriend.option = 3;
 	addfriend.cmd = '?';
     get_time(time_buf);
@@ -745,10 +894,21 @@ struct my_friend *my_friend_link(char *filename)
 	
 }
 
+void print_my_friends(struct my_friend *head)
+{
+	struct my_friend   *temp;
+
+	for(temp = head; temp != NULL; temp = temp -> next) {
+		printf("%s\n", temp->Id);
+	}
+
+
+}
+
 /*查找是否有此好友*/
 int find_friend(char *add_id)
 {
-	struct my_friend *head, temp;
+	struct my_friend *head, *temp;
 	
 	head = my_friend_link(User_id);
 
@@ -760,4 +920,66 @@ int find_friend(char *add_id)
 	}
 
 	return 0;
+}
+
+
+void view_chat_records()
+{
+	char   filename[17];
+	int		 choice;
+	struct chat_records  *head;
+	char	to_id[8];
+	FILE	*fp;
+	struct chat_records  Buf;
+
+	printf("1.查看私聊记录\n");
+	printf("2.查看群聊记录\n");
+	printf("请选择:\n");
+	scanf("%d", &choice);
+	
+	if(choice != 1 && choice != 2) {
+		printf("请重新输入\n");
+		scanf("%d", &choice);
+	}
+
+
+	switch(choice) {
+	
+		case 1:
+			printf("你要查看和谁的聊天记录:");
+			scanf("%s", to_id);
+			strcpy(filename, User_id);
+			strcat(filename, to_id);
+			
+			memset(&Buf, 0, sizeof(struct chat_records));
+			if((fp = fopen(filename, "rb")) == NULL) {
+				printf("没有与该账户的聊天记录\n");
+				break;
+			}
+			while(!feof(fp)) {
+			if(fread(&Buf, sizeof(struct chat_records), 1, fp) <= 0) {
+				break;
+			}
+			printf("%s %s %s\n", Buf.Id, Buf.time, Buf.chat);
+			}
+			break;
+
+		case 2:
+			strcpy(filename, "groupchat");
+			
+			memset(&Buf, 0, sizeof(struct chat_records));
+			if((fp = fopen(filename, "rb")) == NULL) {
+				printf("没有与该账户的聊天\n");
+				break;
+			}
+			while(!feof(fp)) {
+				if(fread(&Buf, sizeof(struct chat_records), 1, fp) <= 0) {
+					break;	
+				}
+				printf("%s %s %s \n", Buf.Id, Buf.time, Buf.chat);
+			}
+			break;
+	
+	}
+
 }
