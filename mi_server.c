@@ -8,8 +8,8 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
-
-
+#include <time.h>
+#include <malloc.h>
 
 //用户的ID,账户名,密码,存在number.txt中
 struct person
@@ -75,15 +75,18 @@ struct sockfd *delet_person(struct sockfd *phead, struct sockfd *temp)
 {
 	struct sockfd  *r;
 	r = phead;
+	char a[8],b[8];
 
-	if(phead = temp) {
-		if(phead -> next != NULL) {
+	strcpy(a, r->Id);
+	strcpy(b, temp->Id);
+	if(strcmp(a, b) == 0) {
+		if(r -> next == NULL) {
 			free(temp);
 			return NULL;
 		}
 	} else {
 		while(r != NULL) {
-			if(r->next == temp) {
+			if(strcmp(r->next->Id, temp->Id) == 0) {
 				r -> next = temp -> next;
 				free(temp);
 				break;
@@ -168,6 +171,7 @@ void write_file_friends(char *user_id, char *username);
 void show_online(struct chat buf);
 
 
+void exit_connfd(struct chat buf);
 
 void main()
 {
@@ -187,7 +191,7 @@ void main()
 
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(7777);
+    serv_addr.sin_port = htons(8888);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
      
    
@@ -274,7 +278,6 @@ void *thread(int *fd)
 					fprintf(stderr, "line:%d ",__LINE__);
 					}
 
-					printf("-----%s----\n",recv_buf);
 					memset(&buf, 0, sizeof(struct chat));
 					memcpy(&buf, recv_buf, sizeof(struct chat));
 
@@ -301,6 +304,11 @@ void *thread(int *fd)
 					case 5://显示在线人
 
 						show_online(buf);
+						break;
+
+					case 8://退出
+						exit_connfd(buf);
+						break;
 					}		
 					}}
 			   break;
@@ -309,6 +317,27 @@ void *thread(int *fd)
 				break;
 	}}
 
+
+
+void exit_connfd(struct chat buf)
+{
+
+	struct sockfd  *temp;
+	int			conn_fd;
+	char		send_buf[800];
+
+    conn_fd = search_person(buf.from_id);
+	temp = (struct sockfd *)malloc(sizeof(struct sockfd));
+	strcpy(temp -> Id, buf.from_id);
+	temp -> conn_fd = conn_fd;
+	phead = delet_person(phead, temp);
+	
+	buf.cmd = 'y';
+	memcpy(send_buf, &buf, sizeof(struct chat));
+
+	send(conn_fd, send_buf, sizeof(send_buf), 0);
+
+}
 
 /*私聊处理*/
 void private_chat(struct chat buf,int to_connfd)
@@ -334,7 +363,7 @@ void private_chat(struct chat buf,int to_connfd)
 		if(send(to_connfd, send_buf, sizeof(send_buf), 0) < 0) {
 			fprintf(stderr, "line:%d ", __LINE__);
 		}
-		printf("已发出");
+	
 	}
 }
 
@@ -771,3 +800,4 @@ void show_online(struct chat buf)
 	}
 	}
 }
+
