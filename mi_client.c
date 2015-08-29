@@ -10,7 +10,10 @@
 #include <time.h>
 #include <string.h>
 #include <pthread.h>
-
+#include <assert.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <termios.h>
 
 struct chat
 {
@@ -141,7 +144,39 @@ void my_err(const char *err_string, int line)
     exit(1);
 }
 
-  
+  int getch(void)                       
+{
+        int c=0;
+        struct termios org_opts, new_opts;
+        int res=0;
+        //-----  store old settings -----------
+        res=tcgetattr(STDIN_FILENO, &org_opts);
+        assert(res==0);
+        //---- set new terminal parms --------
+        memcpy(&new_opts, &org_opts, sizeof(new_opts));
+        new_opts.c_lflag &= ~(ICANON | ECHO | ECHOE | ECHOK | ECHONL | ECHOPRT | ECHOKE | ICRNL);
+        tcsetattr(STDIN_FILENO, TCSANOW, &new_opts);
+        c=getchar();
+            //------  restore old settings ---------
+        res=tcsetattr(STDIN_FILENO, TCSANOW, &org_opts);assert(res==0);
+        return c;
+}
+
+get_password(char *buf, int n)
+{
+	int  c;
+	int i=0;
+
+	 c = getch();
+	 while( (c != '\n') && (i < n)) {
+		buf[i] = c;
+		printf("*");
+		i++;
+		c = getch();
+	 }
+	 buf[i] = '\0';
+}
+
 void main(int argc, char **argv)
 {
 	pthread_t	thid;
@@ -244,6 +279,7 @@ void *thread()
 
 		case 3://添加好友
 			 addfriend_recv(buf);
+			 getchar();
 			break;
 
 		case 4://删除好友
@@ -357,7 +393,14 @@ void sock_login_register()
  	 my_err("connect", __LINE__);
     }
 
-    printf("1.申请 2.登陆, 3.退出"); 
+    system("clear");
+	printf("\n\n\n\n");
+	printf("\t -------------------\n");
+	printf("\t|     1.注册        |\n");
+	printf("\t|     2.登陆        |\n");
+	printf("\t|     3.退出        |\n");
+	printf("\t -------------------\n");
+	printf("\t 请选择: ");
     choice = getchar();
     while(choice != '1' && choice != '2' && choice != '3') {
 	printf("请重新选择");
@@ -392,7 +435,8 @@ void login(int conn_fd)
     printf("ID:");
     scanf("%s", User_id);
     printf("密码");
-    scanf("%s", passwd);
+	getchar();
+	get_password(passwd, 32);
  
     memset(&recv_buf, 0, sizeof(recv_buf));   
     strcpy(recv_buf, User_id);
@@ -482,23 +526,24 @@ void shenqing(int conn_fd)
 char  show_menus()
 {
     char	choice;
-
+	int     i;
  //   do {
 
 	//getchar();
 	while(1) {
-    printf("1.私聊\n");
-    printf("2.群聊\n");
-    printf("3.添加好友\n");
-    printf("4.删除好友\n");
-    printf("5.在线人\n");
-    printf("6.所有好友\n");
-	printf("7.聊天记录");
-    printf("8.服务器日志\n");
-    printf("9.退出\n");
-	printf("请选择:\n");
+	printf("\t ----------------------\n\n\n");
+    printf("\t|     1.私聊           |\n");
+    printf("\t|     2.群聊           |\n");
+    printf("\t|     3.添加好友       |\n");
+    printf("\t|     4.删除好友       |\n");
+    printf("\t|     5.在线人         |\n");
+    printf("\t|     6.所有好友       |\n");
+	printf("\t|     7.聊天记录       |\n");
+    printf("\t|     8.退出           |\n");
+	printf("\t|请选择:               |\n");
+	printf("\n\n\t ----------------------\n");
 	scanf("%c", &choice);
-		if((choice >='1' && choice <= '8') || (choice == 'y') || choice == 'n') {
+		if((choice >='1' && choice <= '8') || (choice == 'y') || (choice == 'n')) {
 			break;
 		}
 
