@@ -220,9 +220,10 @@ void main(int argc, char **argv)
 			ask_online_person(User_id);
 			break;
 
-		case '6'://
+		case '6'://显示好友
 			head = my_friend_link(User_id);
 			print_my_friends(head);
+			getchar();
 			break;
 
 		case '7'://聊天记录
@@ -296,6 +297,8 @@ void *thread()
 			if(buf.cmd == 'y') {
 				printf("成功退出");
 			}
+			shutdown(conn_fd, SHUT_RDWR);
+			exit(1);
 			break;
 	}
 
@@ -349,7 +352,6 @@ void addfriend_y()
 	char	send_buf[800];
 
 			buf_q.cmd = 'y';
-			printf("AAA");
 			strcpy(buf_q.chat,"用户同意了您的添加请求.");
 			memset(&send_buf, 0, sizeof(send_buf));
 			memcpy(send_buf, &buf_q, sizeof(struct chat));
@@ -531,6 +533,7 @@ char  show_menus()
 
 	//getchar();
 	while(1) {
+	printf("\n\n");
 	printf("\t ----------------------\n\n\n");
     printf("\t|     1.私聊           |\n");
     printf("\t|     2.群聊           |\n");
@@ -647,6 +650,7 @@ void private_chat_send(char *User_id)
 	if(strcmp(private.chat, "bye") == 0) {
 		return;
 	}
+	sleep(3);
 	}
 }
 
@@ -725,7 +729,7 @@ void ask_online_person(char *User_id)
 void print_online(struct chat buf)
 {
 	printf(" ----------\n");
-	printf("|   %s   |\n", buf.to_id);
+	printf("|   %s     |\n", buf.to_id);
 }
 
 
@@ -820,10 +824,14 @@ struct chat  add_friend_send(char *User_id)
 	if(a == 0 || s == 1) {
 		if(a == 0) {
 			printf("您不能添加自己为好友\n\n");
+			getchar();
+			getchar();
 			return;
 		}
 		if(s == 1) {
 			printf("TA是你的好友\n不能重复添加\n\n");
+			getchar();
+			getchar();
 			return;
 		}
 	
@@ -942,10 +950,15 @@ struct my_friend *my_friend_link(char *filename)
 void print_my_friends(struct my_friend *head)
 {
 	struct my_friend   *temp;
-
+	int   f=0;
 	for(temp = head; temp != NULL; temp = temp -> next) {
 		printf("%s\n", temp->Id);
+		f = 1;
 	}
+	if(f == 0) {
+		printf("您还没有好友,快去添加吧\n");
+	}
+	getchar();
 
 
 }
