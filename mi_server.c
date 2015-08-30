@@ -11,6 +11,8 @@
 #include <time.h>
 #include <malloc.h>
 
+#define PORT 8888
+
 //用户的ID,账户名,密码,存在number.txt中
 struct person
 {
@@ -73,28 +75,26 @@ struct sockfd *add_person(struct sockfd *phead, struct sockfd *temp)
 /*删除*/
 struct sockfd *delet_person(struct sockfd *phead, struct sockfd *temp)
 {
-	struct sockfd  *r;
+	struct sockfd *r, *p;
+	
 	r = phead;
-	char a[8],b[8];
-
-	strcpy(a, r->Id);
-	strcpy(b, temp->Id);
-	if(strcmp(a, b) == 0) {
-		if(r -> next == NULL) {
-			free(temp);
+	if (r -> conn_fd == temp -> conn_fd) {
+		if(r->next == NULL) {
+			free(phead);
 			return NULL;
 		}
-	} else {
-		while(r != NULL) {
-			if(strcmp(r->next->Id, temp->Id) == 0) {
-				r -> next = temp -> next;
-				free(temp);
-				break;
-			}
-			r = r->next;
-		}
+		phead = r->next;
+		return phead;
 	}
-	return phead;
+
+	while(r != NULL) {
+	 p = r -> next;
+	 if (p -> conn_fd == temp ->conn_fd) {
+		r -> next = p -> next;
+		return phead;
+	 }
+	 r = r->next;
+	}
 }
 
 
@@ -103,10 +103,11 @@ int search_person(char *user_id)
 {
 	struct sockfd *ptemp;
 	int		conn_fd = 0;
+	char a[8],b[8];
 
 	ptemp = phead;
 	while(ptemp != NULL) {
-		if(strcmp(ptemp -> Id, user_id) == 0) {
+		if(strcmp(user_id, ptemp->Id) == 0) {
 			conn_fd = ptemp->conn_fd;
 		}
 		ptemp = ptemp->next;
@@ -173,12 +174,26 @@ void show_online(struct chat buf);
 
 void exit_connfd(struct chat buf);
 
+
+void get_time(char *time_buf)
+{
+	time_t   now;
+	struct tm *timenow;
+
+	time(&now);
+	timenow = localtime(&now);
+	strcpy(time_buf, asctime(timenow));
+
+}
+
 void main()
 {
     int optval;
     int   		sock_fd;
     struct sockaddr_in  cli_addr, serv_addr;
-    
+    char   time_g[30];
+	FILE   *fp2;
+
     if( (sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
 		fprintf(stderr, "line: %d\n", __LINE__);
     }
@@ -191,11 +206,18 @@ void main()
 
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(8888);
+    serv_addr.sin_port = htons(PORT);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
      
    
     if(bind(sock_fd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr_in)) < 0) {
+		if((fp2 = fopen("errnolog.txt", "at")) == NULL) {
+			fprintf(stderr, "line:%d\n", __LINE__);
+		}
+		get_time(time_g);
+		fprintf(fp2, "%s",time_g);
+		fprintf(fp2, "%s\n", "打开文件errnolog.txt失败");
+		fclose(fp2);
 		my_err("bind", __LINE__);
     }
 
@@ -217,13 +239,24 @@ void login_register(int sock_fd)
     char        buf[8];
     int			c;
     struct sockaddr_in cli_addr;
+	FILE	*fp2;
+	char     time_buf[30];
 
     cli_len = sizeof(struct sockaddr_in);
     while(1) {
     conn_fd = accept(sock_fd, (struct sockaddr *)&cli_addr, &cli_len);
     
 	if(conn_fd < 0) {
-	fprintf(stderr, "line: %d\n",__LINE__);
+		
+		if((fp2 = fopen("errnolog.txt", "at")) == NULL) {
+			fprintf(stderr, "line:%d\n", __LINE__);
+		}
+		get_time(time_buf);
+		fprintf(fp2, "%s ",time_buf);
+		fprintf(fp2, "%s\n", "与客户端建立连接失败");
+		fclose(fp2);
+
+		fprintf(stderr, "line: %d\n",__LINE__);
     }
     printf("accept a new client ,ip: %s\n", inet_ntoa(cli_addr.sin_addr));
     
@@ -247,8 +280,11 @@ void *thread(int *fd)
 	int		to_connfd;
 	struct sockfd  *ptemp=NULL;
 	int optval;
-	
-	if(setsockopt(conn_fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,  sizeof(int)) < 0) {
+	char  time_buf[30];
+	char  *string = "账户已上线";
+	FILE *fp1;
+
+	if(setsockopt(conn_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&optval,  sizeof(int)) < 0) {
 		fprintf(stderr, "line:%d ",__LINE__);
 	}
 	
@@ -270,8 +306,18 @@ void *thread(int *fd)
 					ptemp = (struct sockfd *)malloc(sizeof(struct sockfd));
 					ptemp->conn_fd = conn_fd;
 					strcpy(ptemp->Id,User_id);
-
+					
 					phead = add_person(phead, ptemp);
+
+					if((fp1 = fopen("serverlog.txt", "at")) == NULL) {
+						fprintf(stderr, "line:%d\n", __LINE__);		
+					}
+					get_time(time_buf);
+					fprintf(fp1, "%s  ", time_buf);
+					fprintf(fp1, "%s", User_id);
+					fprintf(fp1, "%s\n", string);
+					fclose(fp1);
+
 					memset(recv_buf, 0, sizeof(recv_buf));
 		while(1) {
 					if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
@@ -325,18 +371,33 @@ void exit_connfd(struct chat buf)
 	struct sockfd  *temp;
 	int			conn_fd;
 	char		send_buf[800];
+	char		*string = "账户已下线";
+	FILE        *fp1;
+	char         time_buf[30];
 
     conn_fd = search_person(buf.from_id);
 	temp = (struct sockfd *)malloc(sizeof(struct sockfd));
 	strcpy(temp -> Id, buf.from_id);
 	temp -> conn_fd = conn_fd;
+	temp -> next = NULL;
 	phead = delet_person(phead, temp);
-	
 	buf.cmd = 'y';
 	memcpy(send_buf, &buf, sizeof(struct chat));
+	
+	if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	if((fp1 = fopen("serverlog.txt", "at")) == NULL) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+	get_time(time_buf);
+	fprintf(fp1, "%s ", time_buf);
+	fprintf(fp1, "%s", buf.from_id);
+	fprintf(fp1, "%s\n", string);
+	fclose(fp1);
 
-	send(conn_fd, send_buf, sizeof(send_buf), 0);
-
+	sleep(3);
+	shutdown(conn_fd, SHUT_RDWR);
 }
 
 /*私聊处理*/
@@ -401,10 +462,10 @@ void group_chat(struct chat buf)
 /*添加好友*/
 void add_friend(struct chat buf, int to_connfd)
 {
-	FILE	*fp1, *fp2;
+	FILE	*fp1, *fp2, *fp3;
 	int		from_connfd;
 	char	send_buf[800];
-
+	char    time_buf[30];
 
 	if(buf.cmd == '?') {
 		memcpy(send_buf, &buf, sizeof(struct chat));
@@ -423,15 +484,32 @@ void add_friend(struct chat buf, int to_connfd)
 		if(buf.cmd == 'y') {
 			fp1 = fopen(buf.from_id,"a+");
 			if(fp1 == NULL) {
-				printf("打开文件%s失败!", buf.from_id);
+				if((fp3 = fopen("errnolog.txt", "at")) == NULL) {
+					fprintf(stderr, "line:%d\n", __LINE__);
+				}
+				get_time(time_buf);
+				fprintf(fp3, "%s", time_buf);
+				fprintf(fp3, "%s", buf.from_id);
+				fprintf(fp3, "%s\n", "文件打开失败");
+				fclose(fp3);
+
+				fprintf(stderr, "line:%d\n", __LINE__);
 			}
 			fprintf(fp1,"%s\n", buf.to_id);
 			fclose(fp1);
 			fp2 = fopen(buf.to_id, "a+");
 			if(fp2 == NULL) {
-				printf("打开文件%s失败!", buf.from_id);
+				
+				if((fp3 = fopen("errnolog.txt", "at")) == NULL) {
+					fprintf(stderr, "line:%d\n", __LINE__);
+				}
+				get_time(time_buf);
+				fprintf(fp3, "%s", time_buf);
+				fprintf(fp3, "%s", buf.to_id);
+				fprintf(fp3, "%s\n", "文件打开失败");
+				fclose(fp3);
 			}
-			fprintf(fp2,"%s\n", buf.to_id);
+			fprintf(fp2,"%s\n", buf.from_id);
 			fclose(fp2);
 		}
 	}
@@ -610,8 +688,10 @@ void zhuce(int conn_fd)
 {
     char 	  recv_buf[128];
     int           new_id;
-    FILE	  *fp;	
+    FILE	  *fp, *fp1;	
     struct person message;
+	char   time_buf[30];
+	char   *string = "账户注册成功";
 
     if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) { 
        fprintf(stderr, "line:%d\n",__LINE__);
@@ -633,7 +713,15 @@ void zhuce(int conn_fd)
     }
 	
     fclose(fp);
-      
+
+	if((fp1 = fopen("serverlog.txt", "at")) == NULL) {
+		fprintf(stderr, "line:%d\n", __LINE__);
+	}
+		get_time(time_buf);
+		fprintf(fp1, "%s  ",time_buf);
+		fprintf(fp1, "%d", new_id);
+		fprintf(fp1, "%s\n", string);
+		fclose(fp1);
     write_file_friends(message.Id, message.username); 
     	
 }
