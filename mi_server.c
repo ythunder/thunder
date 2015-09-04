@@ -198,11 +198,11 @@ void main()
 		fprintf(stderr, "line: %d\n", __LINE__);
     }
 
-	optval = 1;
+//	optval = 1;
 
-	if(setsockopt(sock_fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,  sizeof(int)) < 0) {
-		fprintf(stderr, "line:%d ",__LINE__);
-	}
+//	if(setsockopt(sock_fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,  sizeof(int)) < 0) {
+//		fprintf(stderr, "line:%d ",__LINE__);
+//	}
 
     memset(&serv_addr, 0, sizeof(struct sockaddr_in));
     serv_addr.sin_family = AF_INET;
@@ -396,8 +396,7 @@ void exit_connfd(struct chat buf)
 	fprintf(fp1, "%s\n", string);
 	fclose(fp1);
 
-	sleep(3);
-	shutdown(conn_fd, SHUT_RDWR);
+	close(conn_fd);
 }
 
 /*私聊处理*/
