@@ -11,7 +11,7 @@
 #include <time.h>
 #include <malloc.h>
 
-#define PORT 6666
+#define PORT 7777
 
 //用户的ID,账户名,密码,存在number.txt中
 struct person
@@ -160,7 +160,7 @@ void jiexi(char *recv_buf, int id,struct person *message);
 int fen_id(void);
 
 //读注册过得用户信息
-struct friends *read_file_friends();
+//struct friends *read_file_friends();
 
 //改变用户登陆状态
 void state_file_friends(struct friends *phead, char *id, char *string);
@@ -171,9 +171,13 @@ void write_file_friends(char *user_id, char *username);
 /*将在线名单送给客户*/
 void show_online(struct chat buf);
 
+void show_friend_menus(struct chat buf);
+
 
 void exit_connfd(struct chat buf);
 
+
+struct my_friend *read_file_friends(char *filename);
 
 void get_time(char *time_buf)
 {
@@ -320,7 +324,8 @@ void *thread(int *fd)
 
 					memset(recv_buf, 0, sizeof(recv_buf));
 		while(1) {
-					if(recv(conn_fd, recv_buf, sizeof(recv_buf), 0) < 0) {
+			        int   ret;
+					if((ret = recv(conn_fd, recv_buf, sizeof(recv_buf), 0)) < 0) {
 					fprintf(stderr, "line:%d ",__LINE__);
 					}
 				
@@ -328,6 +333,7 @@ void *thread(int *fd)
 					memcpy(&buf, recv_buf, sizeof(struct chat));
 
 					to_connfd = search_person(buf.to_id);
+					
 
 					switch(buf.option) {
 		
@@ -336,7 +342,7 @@ void *thread(int *fd)
 						break;
 
 					case 2: //群聊
-						 group_chat(buf);
+					 group_chat(buf);
 						break;
 
 					case 3://添加好友
@@ -351,9 +357,13 @@ void *thread(int *fd)
 
 						show_online(buf);
 						break;
+					case 6:
+						show_friend_menus(buf);
+						break;
 
 					case 8://退出
 						exit_connfd(buf);
+						pthread_exit(0);
 						break;
 					}		
 					}}
@@ -383,10 +393,13 @@ void exit_connfd(struct chat buf)
 	phead = delet_person(phead, temp);
 	buf.cmd = 'y';
 	memcpy(send_buf, &buf, sizeof(struct chat));
+
 	
 	if(send(conn_fd, send_buf, sizeof(send_buf), 0) < 0) {
 		fprintf(stderr, "line:%d\n", __LINE__);
 	}
+
+	close(conn_fd);
 	if((fp1 = fopen("serverlog.txt", "at")) == NULL) {
 		fprintf(stderr, "line:%d\n", __LINE__);
 	}
@@ -396,7 +409,6 @@ void exit_connfd(struct chat buf)
 	fprintf(fp1, "%s\n", string);
 	fclose(fp1);
 
-	close(conn_fd);
 }
 
 /*私聊处理*/
@@ -467,6 +479,16 @@ void add_friend(struct chat buf, int to_connfd)
 	char	send_buf[800];
 	char    time_buf[30];
 
+	
+	from_connfd = search_person(buf.from_id);
+
+	if(to_connfd == 0) {
+		buf.cmd = 'i';
+		memcpy(send_buf, &buf, sizeof(struct chat));
+		if(send(from_connfd, send_buf, sizeof(send_buf), 0) < 0) {
+			fprintf(stderr, "line:%d ", __LINE__);
+		}
+	}
 	if(buf.cmd == '?') {
 		memcpy(send_buf, &buf, sizeof(struct chat));
 		if(send(to_connfd, send_buf, sizeof(send_buf), 0) < 0) {
@@ -528,8 +550,19 @@ void delet(struct chat buf)
 	head = read_file_friend(buf.from_id);
 	head2 = read_file_friend(buf.to_id);
 
+
 		fromfd = search_person(buf.from_id);
 		tofd = search_person(buf.to_id);
+	
+		if(head2 == NULL) {
+
+		buf.cmd = 'c';
+		memset(send_buf, 0, sizeof(send_buf));
+		memcpy(send_buf, &buf, sizeof(struct chat));
+		send(fromfd, send_buf, sizeof(send_buf), 0);
+		return;
+	}
+
 	if((fp1 = fopen(buf.from_id, "w")) == NULL) {
 		fprintf(stderr, "line:%d ", __LINE__);
 	}
@@ -583,10 +616,9 @@ struct my_friend *read_file_friend(char *filename)
 {
     FILE	*fp;
     struct my_friend  *head, *ptemp, *r;
-    if((fp = fopen(filename, "rt")) == NULL) {	//只读，打开文件friends, 中存结构体(id ,username)
-	fprintf(stderr, "line:%d ", __LINE__);
-    }
-  
+   if(( fp = fopen(filename, "r")) == NULL){	//只读，打开文件friends, 中存结构体(id ,username)
+	return NULL;
+   }
     head = (struct my_friend *)malloc(sizeof(struct my_friend));
     head->next = NULL;
     r = head;
@@ -835,11 +867,12 @@ int fen_id(void)
 	    
 }
 
-/*读出friends中的文件，返回头指针
+
 struct my_friend *read_file_friends(char *filename)	
 {
     FILE	*fp;
     struct my_friend *head, *ptemp, *r;
+
     if((fp = fopen(filename, "rt")) == NULL) {	//只读，打开文件friends, 中存结构体(id ,username)
 	fprintf(stderr, "line:%d ", __LINE__);
     }
@@ -851,7 +884,7 @@ struct my_friend *read_file_friends(char *filename)
     while(!feof(fp)) {
 	
 	ptemp = (struct my_friend *)malloc(sizeof(struct my_friend));
-	fscanf(fp, "%s %s %s", ptemp->Id, ptemp->username, ptemp->state);
+	fscanf(fp, "%s", ptemp->Id);
 
 	r->next = ptemp;
 	r = ptemp;
@@ -862,7 +895,7 @@ struct my_friend *read_file_friends(char *filename)
    
  }
 
-*/
+
 
 /*改变用户登陆状态*/
 void state_file_friends(struct friends *phead, char *id, char *string)
@@ -917,3 +950,34 @@ void show_online(struct chat buf)
 	}
 }
 
+/*显示自己好友*/
+void show_friend_menus(struct chat buf)
+{
+	char   send_buf[800];
+	struct my_friend  *ptemp;
+	int  from_connfd;
+	struct my_friend *head;
+	int    frien = 0;
+
+	head = read_file_friends(buf.from_id);
+
+	from_connfd = search_person(buf.from_id);
+	for(ptemp = head -> next; ptemp -> next != NULL; ptemp = ptemp -> next) 
+	{
+		strcpy(buf.to_id, ptemp->Id);
+		memset(&send_buf, 0, sizeof(send_buf));
+		memcpy(send_buf, &buf, sizeof(send_buf));
+		send(from_connfd, send_buf, sizeof(send_buf), 0);
+		frien = 1;
+	}
+
+	if(frien == 0) {
+		buf.cmd = 't';
+		memset(&send_buf, 0,sizeof(send_buf));
+		memcpy(send_buf, &buf, sizeof(struct chat));
+		send(from_connfd, send_buf, sizeof(send_buf), 0);
+	}
+
+
+
+}
