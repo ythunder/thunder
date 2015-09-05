@@ -48,6 +48,7 @@ struct chat_records
 
 
 /*==================================================*/
+int		yun;
 int   conn_fd;
 int   serv_port;
 struct sockaddr_in  serv_addr;           // 全局变量
@@ -201,6 +202,7 @@ void main(int argc, char **argv)
 
 	switch(c) {
 		case '1':   //发送私聊包
+			yun = 0;
 			private_chat_send(User_id);
 			break;
 
@@ -265,8 +267,10 @@ void *thread()
 	switch(buf.option) {
 
 		case 1://私聊
+	
 			 c = private_chat_recv(buf);
 			 if(c == 0) {
+				 yun = 1;
 				 return;
 			}
 			break;
@@ -286,6 +290,18 @@ void *thread()
 		case 4://删除好友
 			if(buf.cmd == 'y') {
 				printf("删除成功");
+				getchar();
+				getchar();
+			}
+			if(buf.cmd == 'u') {
+			   printf("用户%s删除了你", buf.from_id);	
+				getchar();
+				getchar();
+			}
+			if(buf.cmd == 'w') {
+				printf("TA不是你的好友, 删除失败");
+				getchar();
+				getchar();
 			}
 			break;
 
@@ -295,10 +311,13 @@ void *thread()
 
 		case 8://退出
 			if(buf.cmd == 'y') {
-				printf("成功退出");
+				printf("成功退出\n");
+				sleep(5);
+				close(conn_fd);
+				exit(1);
+			} else {
+				printf("退出失败");
 			}
-			shutdown(conn_fd, SHUT_RDWR);
-			exit(1);
 			break;
 	}
 
@@ -529,9 +548,7 @@ char  show_menus()
 {
     char	choice;
 	int     i;
- //   do {
 
-	//getchar();
 	while(1) {
 	printf("\n\n");
 	printf("\t ----------------------\n\n\n");
@@ -603,6 +620,7 @@ void private_chat_send(char *User_id)
 	FILE *fp;
 	struct chat_records	  Buf;
 
+	
     memset(&private, 0, sizeof(struct chat));
 	printf("请输入您要发送人的Id:");
 	getchar();
@@ -620,6 +638,9 @@ void private_chat_send(char *User_id)
     strcpy(private.to_id, to_id);
  
     while(1) {
+	if(yun == 1) {
+		return ;
+	}
 	printf("%s %s ", User_id, private.time);
 	memset(chat_buf, 0, sizeof(chat_buf));
 	printf("你说:");
@@ -647,10 +668,12 @@ void private_chat_send(char *User_id)
     memcpy(buf, &private, sizeof(struct chat));
 
 	send(conn_fd, buf, sizeof(buf), 0);
+	printf("送出私聊消息");
 	if(strcmp(private.chat, "bye") == 0) {
 		return;
 	}
-	sleep(3);
+	
+	sleep(1);
 	}
 }
 
@@ -915,7 +938,6 @@ void delete_friend_send(char *User_id)
 	if(send(conn_fd, send_buf, sizeof(buf), 0) < 0) {
 		fprintf(stderr, "line:%d ",__LINE__);
 	}
-	printf("删除成功!");
 }
 
 
@@ -951,7 +973,7 @@ void print_my_friends(struct my_friend *head)
 {
 	struct my_friend   *temp;
 	int   f=0;
-	for(temp = head; temp != NULL; temp = temp -> next) {
+	for(temp = head->next; temp != NULL; temp = temp -> next) {
 		printf("%s\n", temp->Id);
 		f = 1;
 	}
@@ -1012,6 +1034,8 @@ void view_chat_records()
 			memset(&Buf, 0, sizeof(struct chat_records));
 			if((fp = fopen(filename, "rb")) == NULL) {
 				printf("没有与该账户的聊天记录\n");
+				getchar();
+				getchar();
 				break;
 			}
 			while(!feof(fp)) {
@@ -1020,6 +1044,8 @@ void view_chat_records()
 			}
 			printf("%s %s %s\n", Buf.Id, Buf.time, Buf.chat);
 			}
+			getchar();
+			getchar();
 			break;
 
 		case 2:
@@ -1027,7 +1053,9 @@ void view_chat_records()
 			
 			memset(&Buf, 0, sizeof(struct chat_records));
 			if((fp = fopen(filename, "rb")) == NULL) {
-				printf("没有与该账户的聊天\n");
+				printf("暂时没有群聊消息\n");
+				getchar();
+				getchar();
 				break;
 			}
 			while(!feof(fp)) {
@@ -1036,6 +1064,8 @@ void view_chat_records()
 				}
 				printf("%s %s %s \n", Buf.Id, Buf.time, Buf.chat);
 			}
+			getchar();
+			getchar();
 			break;
 	
 	}
