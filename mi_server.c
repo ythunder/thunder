@@ -11,7 +11,7 @@
 #include <time.h>
 #include <malloc.h>
 
-#define PORT 7777
+#define PORT 8888
 
 //用户的ID,账户名,密码,存在number.txt中
 struct person
@@ -456,9 +456,9 @@ void group_chat(struct chat buf)
 			continue;
 		}
 		to_fd = search_person(ptemp->Id);
-		if(to_fd != 0) {
-			i++;
+		if(to_fd > 0) {
 			send(to_fd, send_buf, sizeof(send_buf), 0);
+			i++;
 		}
 		}
 	if(i == 0) {
@@ -488,6 +488,7 @@ void add_friend(struct chat buf, int to_connfd)
 		if(send(from_connfd, send_buf, sizeof(send_buf), 0) < 0) {
 			fprintf(stderr, "line:%d ", __LINE__);
 		}
+		return;
 	}
 	if(buf.cmd == '?') {
 		memcpy(send_buf, &buf, sizeof(struct chat));
@@ -748,7 +749,7 @@ void zhuce(int conn_fd)
 {
     char 	  recv_buf[128];
     int           new_id;
-    FILE	  *fp, *fp1;	
+    FILE	  *fp, *fp1, *fp3;	
     struct person message;
 	char   time_buf[30];
 	char   *string = "账户注册成功";
@@ -756,7 +757,6 @@ void zhuce(int conn_fd)
     if(recv(conn_fd, &recv_buf, sizeof(recv_buf), 0) < 0) { 
        fprintf(stderr, "line:%d\n",__LINE__);
     }
-   printf("%s ", recv_buf);
 	
     new_id = fen_id();
     jiexi(recv_buf, new_id, &message);
@@ -783,7 +783,9 @@ void zhuce(int conn_fd)
 		fprintf(fp1, "%s\n", string);
 		fclose(fp1);
     write_file_friends(message.Id, message.username); 
-    	
+    
+	fp3 = fopen(message.Id, "wt");
+	fclose(fp3);
 }
 
 void jiexi(char *recv_buf, int id,struct person *message)
@@ -897,7 +899,7 @@ struct my_friend *read_file_friends(char *filename)
 
 
 
-/*改变用户登陆状态*/
+//改变用户登陆状态
 void state_file_friends(struct friends *phead, char *id, char *string)
 {
     FILE    *fp;
@@ -916,7 +918,7 @@ void state_file_friends(struct friends *phead, char *id, char *string)
     fclose(fp);
 }
 
-/*将所有注册账号存入*/
+//将所有注册账号存入
 void write_file_friends(char *user_id, char *username)
 {
     FILE	*fp;
