@@ -1,28 +1,27 @@
-#include <stdio.h>
-#include <string.h>
+/*************************************************************************
+	> File Name: test.c
+	> Author: yunting
+	> Mail:1368282581@qq.com 
+	> Created Time: 2015年12月28日 星期一 16时38分17秒
+ ************************************************************************/
 
-struct student
-{
-    char  number[5];
-    char name[10];
-};
+#include<stdio.h>
 
 int main()
 {
-    struct student stu,stu1;
-    char buf[100];
+    char c1, c2;
+    char s1[30], s2[30];
+    char same[30];
+    int j = 0, i = 0, k  =0; 
 
-    memset(&stu, 0, sizeof(struct student));
-
-    strcpy(stu.number, "yun");
-    strcpy(stu.name, "yunting");
-
-    memcpy(buf, &stu, sizeof(struct student));
-    printf("%s\n", buf);
-   
-    memcpy(&stu1, buf, sizeof(struct student));
-    printf("%s %s\n", stu1.number, stu1.name);
-    
-    return 0;
+    scanf("%s", s1);
+    scanf("%s", s2);
+    c1 = s1[i++];
+    c2 = s2[k++];
+    while (c1 == c2) {
+        same[j++] = c1;
+        c1 = s1[i++];
+        c2 = s2[k++];
+    }
+    printf("the common preix is%s\n", same);
 }
-
